@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import type { Locale } from "../domain/locale";
+import { BorderGlow } from "./reactbits/BorderGlow";
 
 interface Props {
   locale: Locale;
@@ -33,6 +34,7 @@ export function WalletFlowForm({ locale, disabled, onSubmit }: Props) {
   };
 
   return (
+    <BorderGlow className="flow-search-glow" glowColor="82 225 204" edgeSensitivity={90}>
     <form className="flow-search" onSubmit={submit} id="investigate">
       <div className="flow-search-heading">
         <div>
@@ -71,5 +73,6 @@ export function WalletFlowForm({ locale, disabled, onSubmit }: Props) {
         </small>
       </label>
     </form>
+    </BorderGlow>
   );
 }

@@ -1,6 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
 import { WalletFlowForm } from "./components/WalletFlowForm";
+import { Dock } from "./components/reactbits/Dock";
+import { PixelCard } from "./components/reactbits/PixelCard";
+import { Threads } from "./components/reactbits/Threads";
 import type { RequestPhase, WalletFlowResult } from "./domain/apiTypes";
 import type { Locale } from "./domain/locale";
 
@@ -79,6 +82,12 @@ export default function App() {
   const [isInstalled, setIsInstalled] = useState(false);
   const activeRequest = useRef<AbortController | null>(null);
   const copy = COPY[locale];
+  const dockItems = [
+    { icon: "⌂", label: locale === "es" ? "Inicio" : "Home", href: "#top" },
+    { icon: "⌕", label: copy.investigate, href: "#investigate" },
+    { icon: "◇", label: copy.method, href: "#method" },
+    { icon: "⌘", label: copy.integrations, href: "#integrations" }
+  ];
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -170,6 +179,8 @@ export default function App() {
         </div>
       </header>
 
+      <Dock items={dockItems} ariaLabel={locale === "es" ? "Navegación rápida" : "Quick navigation"} />
+
       {installHint ? (
         <div className="install-toast" role="status">
           <span aria-hidden="true">▣</span>
@@ -180,6 +191,7 @@ export default function App() {
 
       <main id="top">
         <section className="flow-hero detective-hero">
+          <Threads color={[.34, .9, .8]} amplitude={.82} distance={.14} enableMouseInteraction className="hero-threads" />
           <div className="hero-badge"><span /> {copy.caseFile}<strong>{copy.liveTrace}</strong></div>
           <div className="flow-hero-grid">
             <div className="hero-copy-block">
@@ -252,18 +264,18 @@ export default function App() {
             <p>{copy.methodBody}</p>
           </div>
           <div className="method-points">
-            <article><span>OBSERVED</span><h3>{copy.observedTitle}</h3><p>{copy.observedBody}</p></article>
-            <article><span>NOT PROVEN</span><h3>{copy.notProvenTitle}</h3><p>{copy.notProvenBody}</p></article>
-            <article><span>EVENT HORIZON</span><h3>{copy.horizonTitle}</h3><p>{copy.horizonBody}</p></article>
+            <PixelCard variant="cyan"><article><span>OBSERVED</span><h3>{copy.observedTitle}</h3><p>{copy.observedBody}</p></article></PixelCard>
+            <PixelCard variant="violet"><article><span>NOT PROVEN</span><h3>{copy.notProvenTitle}</h3><p>{copy.notProvenBody}</p></article></PixelCard>
+            <PixelCard variant="amber"><article><span>EVENT HORIZON</span><h3>{copy.horizonTitle}</h3><p>{copy.horizonBody}</p></article></PixelCard>
           </div>
         </section>
 
         <section className="integration-section" id="integrations">
           <div><p className="eyebrow">{copy.architecture}</p><h2>{copy.architectureTitle}</h2></div>
           <div className="integration-grid">
-            <article><span className="status-live">{copy.live}</span><h3>Alchemy</h3><p>{copy.alchemy}</p></article>
-            <article><span className="status-progress">{copy.progress}</span><h3>The Graph + HSK</h3><p>{copy.graphHsk}</p></article>
-            <article><span className="status-progress">{copy.progress}</span><h3>MCP + x402</h3><p>{copy.mcp}</p></article>
+            <PixelCard variant="cyan"><article><span className="status-live">{copy.live}</span><h3>Alchemy</h3><p>{copy.alchemy}</p></article></PixelCard>
+            <PixelCard variant="violet"><article><span className="status-progress">{copy.progress}</span><h3>The Graph + HSK</h3><p>{copy.graphHsk}</p></article></PixelCard>
+            <PixelCard variant="amber"><article><span className="status-progress">{copy.progress}</span><h3>MCP + x402</h3><p>{copy.mcp}</p></article></PixelCard>
           </div>
         </section>
       </main>
