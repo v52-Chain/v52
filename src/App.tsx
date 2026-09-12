@@ -1,13 +1,18 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
+import { AuditForm } from "./components/AuditForm";
+import { EvidenceInspector } from "./components/EvidenceInspector";
+import { RunProgress } from "./components/RunProgress";
+import { VerdictPanel } from "./components/VerdictPanel";
 import { WalletFlowForm } from "./components/WalletFlowForm";
 import { Dock } from "./components/reactbits/Dock";
 import { PixelCard } from "./components/reactbits/PixelCard";
 import { Threads } from "./components/reactbits/Threads";
-import type { RequestPhase, WalletFlowResult } from "./domain/apiTypes";
+import type { AuditResult, ClaimAuditRequest, RequestPhase, WalletFlowResult } from "./domain/apiTypes";
 import type { Locale } from "./domain/locale";
 
 type HealthState = "checking" | "online" | "degraded" | "offline";
+type InvestigationMode = "wallet" | "claim";
 
 const WalletFlowGraph = lazy(() =>
   import("./components/WalletFlowGraph").then((module) => ({ default: module.WalletFlowGraph }))
@@ -74,13 +79,18 @@ const errorMessage = (error: unknown, locale: Locale) => {
 export default function App() {
   const [locale, setLocale] = useState<Locale>(() => window.localStorage.getItem("v52-locale") === "en" ? "en" : "es");
   const [phase, setPhase] = useState<RequestPhase>("IDLE");
+  const [auditPhase, setAuditPhase] = useState<RequestPhase>("IDLE");
+  const [mode, setMode] = useState<InvestigationMode>("wallet");
   const [health, setHealth] = useState<HealthState>("checking");
   const [result, setResult] = useState<WalletFlowResult | null>(null);
+  const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installHint, setInstallHint] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const activeRequest = useRef<AbortController | null>(null);
+  const activeAuditRequest = useRef<AbortController | null>(null);
   const copy = COPY[locale];
   const dockItems = [
     { icon: "⌂", label: locale === "es" ? "Inicio" : "Home", href: "#top" },
@@ -102,7 +112,10 @@ export default function App() {
     return () => controller.abort();
   }, []);
 
-  useEffect(() => () => activeRequest.current?.abort(), []);
+  useEffect(() => () => {
+    activeRequest.current?.abort();
+    activeAuditRequest.current?.abort();
+  }, []);
 
   useEffect(() => {
     setIsInstalled(window.matchMedia("(display-mode: standalone)").matches);
@@ -148,6 +161,24 @@ export default function App() {
       if (nextError instanceof DOMException && nextError.name === "AbortError") return;
       setError(errorMessage(nextError, locale));
       setPhase("ERROR");
+    }
+  };
+
+  const auditClaim = async (request: ClaimAuditRequest) => {
+    activeAuditRequest.current?.abort();
+    const controller = new AbortController();
+    activeAuditRequest.current = controller;
+    setAuditPhase("RUNNING");
+    setAuditResult(null);
+    setAuditError(null);
+    try {
+      const next = await vector52Client.auditClaim(request, controller.signal);
+      setAuditResult(next);
+      setAuditPhase("SUCCESS");
+    } catch (nextError) {
+      if (nextError instanceof DOMException && nextError.name === "AbortError") return;
+      setAuditError(errorMessage(nextError, locale));
+      setAuditPhase("ERROR");
     }
   };
 
@@ -226,27 +257,49 @@ export default function App() {
           </div>
         </section>
 
-        <WalletFlowForm locale={locale} disabled={phase === "RUNNING"} onSubmit={(address, limit) => void investigate(address, limit)} />
+        <section className="investigation-switch" id="investigate" aria-label={locale === "es" ? "Tipo de investigación" : "Investigation type"}>
+          <div>
+            <p className="eyebrow">VECTOR52 CORE</p>
+            <h2>{locale === "es" ? "Elige la superficie de investigación" : "Choose the investigation surface"}</h2>
+          </div>
+          <div className="investigation-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={mode === "wallet"} onClick={() => setMode("wallet")}>
+              {locale === "es" ? "Mapa de wallet" : "Wallet map"}
+            </button>
+            <button type="button" role="tab" aria-selected={mode === "claim"} onClick={() => setMode("claim")}>
+              {locale === "es" ? "Auditar claim" : "Audit claim"}
+            </button>
+          </div>
+        </section>
 
-        {phase === "RUNNING" ? (
+        {mode === "wallet" ? (
+          <WalletFlowForm locale={locale} disabled={phase === "RUNNING"} onSubmit={(address, limit) => void investigate(address, limit)} />
+        ) : (
+          <section className="workspace-grid claim-workspace">
+            <AuditForm locale={locale} disabled={auditPhase === "RUNNING"} onSubmit={(request) => void auditClaim(request)} />
+            <RunProgress phase={auditPhase} locale={locale} />
+          </section>
+        )}
+
+        {mode === "wallet" && phase === "RUNNING" ? (
           <section className="flow-loading" role="status">
             <div className="scanner" aria-hidden="true"><span /></div>
             <div><p className="eyebrow">{copy.acquiring}</p><h2>{copy.separating}</h2><p>{copy.acquiringBody}</p></div>
           </section>
         ) : null}
 
-        {error ? (
+        {mode === "wallet" && error ? (
           <section className="error-banner" role="alert">
             <div><p className="eyebrow">{copy.stopped}</p><h2>{copy.noFake}</h2></div>
             <p>{error}</p>
           </section>
         ) : null}
 
-        {result ? (
+        {mode === "wallet" && result ? (
           <Suspense fallback={<section className="flow-loading"><div className="scanner" aria-hidden="true"><span /></div><div><h2>{copy.preparing}</h2></div></section>}>
             <WalletFlowGraph result={result} locale={locale} />
           </Suspense>
-        ) : phase !== "RUNNING" && !error ? (
+        ) : mode === "wallet" && phase !== "RUNNING" && !error ? (
           <section className="graph-empty">
             <div className="empty-orbit" aria-hidden="true"><i /><i /><span>V52</span></div>
             <div>
@@ -255,6 +308,20 @@ export default function App() {
               <p>{copy.emptyBody}</p>
             </div>
           </section>
+        ) : null}
+
+        {mode === "claim" && auditError ? (
+          <section className="error-banner" role="alert">
+            <div><p className="eyebrow">{locale === "es" ? "Auditoría detenida" : "Audit stopped"}</p><h2>{copy.noFake}</h2></div>
+            <p>{auditError}</p>
+          </section>
+        ) : null}
+
+        {mode === "claim" && auditResult ? (
+          <div className="audit-results" aria-live="polite">
+            <VerdictPanel result={auditResult} locale={locale} />
+            <EvidenceInspector supporting={auditResult.evidence_for} opposing={auditResult.evidence_against} locale={locale} />
+          </div>
         ) : null}
 
         <section className="buildathon-method" id="method">

@@ -22,14 +22,17 @@ describe("AuditForm", () => {
     render(<AuditForm onSubmit={submit} />);
 
     const hash = `0x${"1".repeat(64)}`;
+    const subject = `0x${"2".repeat(40)}`;
     await user.type(screen.getByLabelText(/transaction hash/i), hash);
     await user.type(screen.getByLabelText(/claim to verify/i), "The subject contributed all observed volume.");
+    await user.type(screen.getByLabelText(/subject address/i), subject);
     await user.click(screen.getByRole("button", { name: /run evidence audit/i }));
 
     expect(submit).toHaveBeenCalledWith({
       chain_id: 1,
       transaction_hash: hash,
       claim: "The subject contributed all observed volume.",
+      subject,
       use_ai: false
     });
   });

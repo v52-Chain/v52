@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { ClaimAuditRequest } from "../domain/apiTypes";
+import type { Locale } from "../domain/locale";
 import {
   toClaimAuditRequest,
   validateAuditForm,
@@ -9,6 +10,7 @@ import {
 
 interface AuditFormProps {
   disabled?: boolean;
+  locale?: Locale;
   onSubmit: (request: ClaimAuditRequest) => void | Promise<void>;
 }
 
@@ -19,7 +21,7 @@ const initialValues: AuditFormValues = {
   useAi: false
 };
 
-export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
+export function AuditForm({ disabled = false, locale = "en", onSubmit }: AuditFormProps) {
   const [values, setValues] = useState(initialValues);
   const [errors, setErrors] = useState<AuditFormErrors>({});
 
@@ -30,7 +32,7 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextErrors = validateAuditForm(values);
+    const nextErrors = validateAuditForm(values, locale);
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -44,14 +46,14 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
     <form className="audit-form" onSubmit={handleSubmit} noValidate>
       <div className="form-heading">
         <div>
-          <p className="eyebrow">New audit</p>
-          <h2>Challenge an onchain claim</h2>
+          <p className="eyebrow">{locale === "es" ? "Nueva auditoría" : "New audit"}</p>
+          <h2>{locale === "es" ? "Cuestiona una afirmación onchain" : "Challenge an onchain claim"}</h2>
         </div>
         <span className="network-chip">Ethereum · Mainnet</span>
       </div>
 
       <label className="field" htmlFor="transaction-hash">
-        <span>Transaction hash</span>
+        <span>{locale === "es" ? "Hash de transacción" : "Transaction hash"}</span>
         <input
           id="transaction-hash"
           name="transactionHash"
@@ -64,7 +66,7 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
           aria-describedby={errors.transactionHash ? "transaction-error" : "transaction-help"}
           onChange={(event) => update("transactionHash", event.target.value)}
         />
-        <small id="transaction-help">A public Ethereum transaction. Vector52 never asks for a wallet connection.</small>
+        <small id="transaction-help">{locale === "es" ? "Una transacción pública de Ethereum. Vector52 nunca solicita conectar una wallet." : "A public Ethereum transaction. Vector52 never asks for a wallet connection."}</small>
         {errors.transactionHash ? (
           <small className="field-error" id="transaction-error" role="alert">
             {errors.transactionHash}
@@ -73,12 +75,12 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
       </label>
 
       <label className="field" htmlFor="claim">
-        <span>Claim to verify</span>
+        <span>{locale === "es" ? "Afirmación a verificar" : "Claim to verify"}</span>
         <textarea
           id="claim"
           name="claim"
           rows={4}
-          placeholder="Example: The subject contributed the entire volume observed in this swap."
+          placeholder={locale === "es" ? "Ejemplo: El sujeto aportó todo el volumen observado en este swap." : "Example: The subject contributed the entire volume observed in this swap."}
           value={values.claim}
           disabled={disabled}
           aria-invalid={Boolean(errors.claim)}
@@ -86,7 +88,7 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
           onChange={(event) => update("claim", event.target.value)}
         />
         <div className="field-meta">
-          <small id="claim-help">State one specific, falsifiable claim.</small>
+          <small id="claim-help">{locale === "es" ? "Formula una afirmación específica y refutable." : "State one specific, falsifiable claim."}</small>
           <small>{values.claim.length}/1000</small>
         </div>
         {errors.claim ? (
@@ -97,7 +99,7 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
       </label>
 
       <label className="field" htmlFor="subject">
-        <span>Subject address <em>optional</em></span>
+        <span>{locale === "es" ? "Dirección del sujeto" : "Subject address"}</span>
         <input
           id="subject"
           name="subject"
@@ -110,7 +112,7 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
           aria-describedby={errors.subject ? "subject-error" : "subject-help"}
           onChange={(event) => update("subject", event.target.value)}
         />
-        <small id="subject-help">Used to distinguish protocol volume from directly attributable flow.</small>
+        <small id="subject-help">{locale === "es" ? "Permite separar volumen del protocolo de flujo directamente atribuible." : "Used to distinguish protocol volume from directly attributable flow."}</small>
         {errors.subject ? (
           <small className="field-error" id="subject-error" role="alert">
             {errors.subject}
@@ -128,13 +130,13 @@ export function AuditForm({ disabled = false, onSubmit }: AuditFormProps) {
           onChange={(event) => update("useAi", event.target.checked)}
         />
         <span>
-          <strong>AI-assisted explanation</strong>
-          <small>Optional and non-authoritative. Evidence and verdict rules stay deterministic.</small>
+          <strong>{locale === "es" ? "Explicación asistida por IA" : "AI-assisted explanation"}</strong>
+          <small>{locale === "es" ? "Opcional y no autoritativa. La evidencia y el veredicto siguen siendo deterministas." : "Optional and non-authoritative. Evidence and verdict rules stay deterministic."}</small>
         </span>
       </label>
 
       <button className="primary-action" type="submit" disabled={disabled}>
-        <span>{disabled ? "Audit running" : "Run evidence audit"}</span>
+        <span>{disabled ? (locale === "es" ? "Auditoría en curso" : "Audit running") : (locale === "es" ? "Ejecutar auditoría" : "Run evidence audit")}</span>
         <span aria-hidden="true">→</span>
       </button>
     </form>

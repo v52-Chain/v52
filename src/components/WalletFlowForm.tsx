@@ -35,7 +35,7 @@ export function WalletFlowForm({ locale, disabled, onSubmit }: Props) {
 
   return (
     <BorderGlow className="flow-search-glow" glowColor="82 225 204" edgeSensitivity={90}>
-    <form className="flow-search" onSubmit={submit} id="investigate">
+    <form className="flow-search" onSubmit={submit}>
       <div className="flow-search-heading">
         <div>
           <p className="eyebrow">{copy.eyebrow}</p>

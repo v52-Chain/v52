@@ -337,6 +337,14 @@ footer { display: flex; justify-content: space-between; width: min(1180px, calc(
 /* ── Buildathon wallet-flow surface ─────────────────────────────────────── */
 .buildathon-app { --flow-in: #10a486; --flow-out: #ef6259; --night: #17142e; }
 .buildathon-app main { width: min(1240px, calc(100vw - 40px)); }
+.investigation-switch { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin: 20px 0 10px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 12px 34px var(--shadow); scroll-margin-top: 90px; }
+.investigation-switch .eyebrow { margin: 0 0 5px; }
+.investigation-switch h2 { margin: 0; font-size: clamp(1.15rem, 2vw, 1.6rem); }
+.investigation-tabs { display: flex; flex: 0 0 auto; padding: 4px; border: 1px solid #d8d3ef; border-radius: 12px; background: #f3f1fb; }
+.investigation-tabs button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 8px; color: #6e6880; background: transparent; cursor: pointer; font-weight: 800; }
+.investigation-tabs button[aria-selected="true"] { color: #fff; background: linear-gradient(115deg, #302271, #6550d8); box-shadow: 0 7px 16px rgba(69,49,150,.22); }
+.claim-workspace { margin-top: 10px; }
+.audit-results { display: grid; gap: 20px; margin-top: 20px; }
 .flow-hero {
   overflow: hidden;
   margin-bottom: 20px;
@@ -556,6 +564,8 @@ footer { display: flex; justify-content: space-between; width: min(1180px, calc(
   .principle-strip { grid-template-columns: 1fr 1fr; }
   .principle-strip span { border-bottom: 1px solid rgba(255,255,255,.08); }
   .flow-search { padding: 22px 18px; }
+  .investigation-switch { align-items: stretch; flex-direction: column; padding: 18px; }
+  .investigation-tabs { display: grid; grid-template-columns: 1fr 1fr; }
   .flow-search-heading, .flow-result-head { flex-direction: column; }
   .wallet-input-row { grid-template-columns: 1fr 105px; }
   .wallet-input-row button { grid-column: 1 / -1; height: 48px; }

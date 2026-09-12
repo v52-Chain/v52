@@ -6,7 +6,7 @@
 
 **Repositorio:** `v52-Chain/v52`
 
-**Estado:** frontend separado y listo para adaptar a la Buildathon
+**Estado:** PWA Buildathon activa; Wallet Map y Audit Claim conectados al backend
 
 ## División
 
@@ -14,16 +14,18 @@
 - Jhamil: Agent Access, estados MCP/x402/job y pruebas correspondientes.
 - Compartido: tipos API, accesibilidad, design tokens e integración.
 
-## El baseline ya contiene
+## Implementado
 
-- formulario de transaction/claim/subject;
+- landing detective bilingüe ES/EN;
+- formulario real de wallet y grafo interactivo de ingresos/egresos;
+- formulario de transaction/claim/subject conectado a `/v1/claim-audit`;
 - cliente HTTP tipado;
 - estados de health, loading, error y resultado;
 - Evidence Inspector y Verdict Panel;
-- validaciones y pruebas iniciales;
+- validaciones y 8 pruebas;
 - manifest y service worker PWA.
 
-Todavía está orientado a ETHOnline, Ethereum Mainnet y sponsors anteriores. Consultar [la guía de migración](MIGRACION-BUILDATHON.md) antes de modificarlo.
+El frontend muestra fielmente `DEGRADED`, warnings y `UNKNOWN`. No interpreta esos estados como análisis terminado. El Core forense, `.v52`, HSK y Agent Access continúan pendientes de integración end-to-end.
 
 El backend ya no vive en este repositorio. Su fuente canónica es `v52-Chain/v52-backend`; toda comunicación usa el contrato HTTP/OpenAPI versionado.
 

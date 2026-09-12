@@ -2,6 +2,13 @@ export type CaseStatus =
   | "PENDING"
   | "RUNNING"
   | "COMPLETE"
+  | "DEGRADED"
+  | "FAILED";
+
+export type EvidenceStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETE"
   | "PARTIAL"
   | "WARNING"
   | "FAILED"
@@ -26,7 +33,7 @@ export interface ClaimAuditRequest {
   chain_id: 1;
   transaction_hash: string;
   claim: string;
-  subject?: string;
+  subject: string;
   use_ai: boolean;
 }
 
@@ -37,61 +44,74 @@ export interface EvidenceItem {
   method?: string;
   retrieved_at?: string;
   raw_sha256?: string;
-  status: CaseStatus;
+  status: EvidenceStatus;
   block_number?: number;
-  summary?: string;
+  request_fingerprint?: string;
+  raw_path?: string;
+  adapter_version?: string;
+  indexing_errors?: boolean | null;
+  graph_deployment?: string | null;
   warnings?: string[];
 }
 
 export interface PredicateResult {
-  predicate_id: string;
-  description: string;
-  outcome: "TRUE" | "FALSE" | "UNKNOWN";
+  id: string;
+  statement: string;
+  result: boolean | null;
+  confidence?: string | null;
   evidence_ids: string[];
+  reasoning?: string | null;
 }
 
-export interface TokenAmount {
+export interface TokenInfo {
   address: string;
   symbol?: string;
-  raw_amount: string;
-  formatted_amount?: string;
+  decimals?: number | null;
+  name?: string | null;
+}
+
+export interface SwapEvent {
+  pool_address: string;
+  token0: TokenInfo;
+  token1: TokenInfo;
+  sender: string;
+  recipient: string;
+  router?: string | null;
+  amount0: string;
+  amount1: string;
+  amount_in_raw: string;
+  amount_out_raw: string;
+  token_in: TokenInfo;
+  token_out: TokenInfo;
+  evidence_ids: string[];
+  warnings: string[];
 }
 
 export interface ProtocolAction {
   protocol: "uniswap_v3" | string;
   action: string;
-  pool?: string;
-  router?: string;
-  sender?: string;
-  recipient?: string;
-  token_in?: TokenAmount;
-  token_out?: TokenAmount;
-  evidence_ids: string[];
+  swap?: SwapEvent | null;
+  subject_address?: string | null;
+  contribution_evidence_ids: string[];
   warnings: string[];
+  subject_contribution_proven: boolean;
+  ambiguous_intermediary: boolean;
 }
 
 export interface ContributionResult {
-  subject?: string;
-  attributable_value?: string;
-  protocol_volume?: string;
-  unit?: string;
-  ratio?: number;
-  evidence_ids: string[];
+  subject: string;
+  amount_in_raw?: string | null;
+  amount_out_raw?: string | null;
+  token_in_symbol?: string | null;
+  token_out_symbol?: string | null;
+  percentage_of_pool_volume?: string | null;
   warnings: string[];
-}
-
-export interface ProviderProvenance {
-  provider: string;
-  status: CaseStatus;
-  block_number?: number;
-  has_indexing_errors?: boolean;
-  request_fingerprint?: string;
 }
 
 export interface AuditResult {
   case_id: string;
   status: CaseStatus;
-  verdict: Verdict;
+  verdict: Verdict | null;
   summary: string;
   predicates: PredicateResult[];
   evidence_for: EvidenceItem[];
@@ -101,8 +121,14 @@ export interface AuditResult {
   protocol_action: ProtocolAction | null;
   contribution: ContributionResult | null;
   provenance: {
-    providers: ProviderProvenance[];
-  };
+    case_id: string;
+    tx_hash: string;
+    chain_id: number;
+    evidence_record_ids: string[];
+    vault_paths: string[];
+    adapter_versions: string[];
+  } | null;
+  timing_ms: Record<string, number>;
 }
 
 export interface HealthResponse {
