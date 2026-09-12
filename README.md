@@ -28,6 +28,8 @@
 - manifest y service worker PWA.
 - Reown AppKit con WalletConnect/Wagmi/Viem;
 - autenticación real por challenge firmado, nonce de un solo uso y sesión temporal;
+- Access Hub premium con acceso Web Wallet y configuración MCP para Claude, Codex u otro cliente;
+- plan dinámico servido por el backend y compra x402 desde la wallet conectada: 2 USDC Fuji activan 30 investigaciones;
 - canal visual MCP/x402 alimentado por `/v1/agent/capabilities`;
 - separación estricta entre wallet conectada y wallet investigada.
 
@@ -51,6 +53,7 @@ Configurar:
 ```dotenv
 VITE_API_BASE_URL=http://127.0.0.1:8000
 VITE_REOWN_PROJECT_ID=<project-id-publico-de-reown>
+VITE_MCP_SERVER_URL=http://localhost:8080/mcp
 ```
 
 El Project ID de Reown identifica el proyecto cliente y puede ser público. En producción, registrar el dominio real en Reown Verify y usar el mismo origen en el backend. Nunca colocar claves de proveedores, tokens del Relayer o private keys en variables Vite.
@@ -59,10 +62,10 @@ El Project ID de Reown identifica el proyecto cliente y puede ser público. En p
 
 | Canal | Identidad/autorización | Endpoint |
 |---|---|---|
-| Persona en PWA | Reown conecta; challenge firmado crea bearer session | `POST /v1/web/investigations/wallet-flow` |
+| Persona en PWA | Reown conecta; firma crea sesión; x402 compra un paquete de créditos | `GET /v1/web/plans`, `POST /v1/web/credits/purchase`, `POST /v1/web/investigations/wallet-flow` |
 | Agente MCP | Política/signer local; x402 paga antes de ejecutar | `POST /v1/agent/investigations/wallet-flow` |
 
-El navegador nunca auto-paga ni custodia llaves. El agente no recibe una ruta secreta ni un Core diferente. El contrato completo está en [`ACCESS-CONTRACT.md`](../../ACCESS-CONTRACT.md).
+La detección y el reintento del `402` son automáticos, pero la wallet siempre muestra la autorización criptográfica del pago. El navegador no custodia llaves. El agente no recibe una ruta secreta ni un Core diferente. El contrato completo está en [`ACCESS-CONTRACT.md`](../../ACCESS-CONTRACT.md).
 
 ## Validar
 

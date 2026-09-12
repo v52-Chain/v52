@@ -1,4 +1,4 @@
-import type { AgentCapabilities, AuditResult, ClaimAuditRequest, HealthResponse, WalletChallenge, WalletFlowFilters, WalletFlowResult, WalletSession, WalletVerifyInput } from "../domain/apiTypes";
+import type { AccessPlans, AgentCapabilities, AuditResult, ClaimAuditRequest, CreditBalance, HealthResponse, WalletChallenge, WalletFlowFilters, WalletSession, WalletVerifyInput, WebWalletFlowResponse } from "../domain/apiTypes";
 
 export class Vector52ApiError extends Error {
   readonly status: number;
@@ -13,6 +13,8 @@ export class Vector52ApiError extends Error {
 }
 
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, "");
+export const vector52ApiBaseUrl = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL ?? "");
+export const vector52ApiUrl = (path: string) => `${vector52ApiBaseUrl}${path}`;
 
 export class Vector52Client {
   private readonly baseUrl: string;
@@ -50,8 +52,8 @@ export class Vector52Client {
     });
   }
 
-  async webWalletFlow(address: string, limit: number, filters: WalletFlowFilters, accessToken: string, signal?: AbortSignal): Promise<WalletFlowResult> {
-    const response = await this.request<{ result: WalletFlowResult }>("/v1/web/investigations/wallet-flow", {
+  async webWalletFlow(address: string, limit: number, filters: WalletFlowFilters, accessToken: string, signal?: AbortSignal): Promise<WebWalletFlowResponse> {
+    return this.request<WebWalletFlowResponse>("/v1/web/investigations/wallet-flow", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -66,7 +68,17 @@ export class Vector52Client {
       }),
       signal
     });
-    return response.result;
+  }
+
+  async accessPlans(signal?: AbortSignal): Promise<AccessPlans> {
+    return this.request<AccessPlans>("/v1/web/plans", { signal });
+  }
+
+  async creditBalance(accessToken: string, signal?: AbortSignal): Promise<CreditBalance> {
+    return this.request<CreditBalance>("/v1/web/credits", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal
+    });
   }
 
   async agentCapabilities(signal?: AbortSignal): Promise<AgentCapabilities> {
@@ -101,9 +113,13 @@ export class Vector52Client {
       : await response.text().catch(() => undefined);
 
     if (!response.ok) {
-      const apiMessage =
-        typeof details === "object" && details !== null && "detail" in details
-          ? String((details as { detail: unknown }).detail)
+      const detail = typeof details === "object" && details !== null && "detail" in details
+        ? (details as { detail: unknown }).detail
+        : undefined;
+      const apiMessage = typeof detail === "object" && detail !== null && "message" in detail
+        ? String((detail as { message: unknown }).message)
+        : detail !== undefined
+          ? String(detail)
           : `Request failed with status ${response.status}.`;
       throw new Vector52ApiError(apiMessage, response.status, details);
     }

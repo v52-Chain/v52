@@ -155,6 +155,46 @@ export interface WalletSession {
   expires_at: string;
 }
 
+export interface AccessPlan {
+  id: string;
+  name: string;
+  description: string;
+  network: string;
+  asset: string;
+  asset_symbol: "USDC";
+  asset_decimals: 6;
+  price_atomic: string;
+  requests: number;
+  enabled: boolean;
+}
+
+export interface AccessPlans {
+  plans: AccessPlan[];
+  credits_required: boolean;
+}
+
+export interface CreditBalance {
+  wallet: string;
+  available: number;
+  purchased: number;
+  consumed: number;
+  updated_at: string;
+}
+
+export interface CreditPurchase {
+  status: "SETTLEMENT_PENDING";
+  purchase_id: string;
+  beneficiary_wallet: string;
+  plan: AccessPlan;
+}
+
+export interface WebWalletFlowResponse {
+  channel: "WEB";
+  actor_wallet: string;
+  result: WalletFlowResult;
+  credits_remaining?: number | null;
+}
+
 export interface WalletVerifyInput {
   nonce: string;
   message: string;

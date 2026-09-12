@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { ArrowRight, Bot, Download, FileCheck2, Globe2, Network, PlugZap, Search, ShieldCheck, Waypoints, Zap } from "lucide-react";
+import { ArrowRight, Bot, ChevronDown, Download, FileCheck2, Globe2, Network, PlugZap, Search, ShieldCheck, Waypoints, Zap } from "lucide-react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
 import { AuditForm } from "./components/AuditForm";
 import { EvidenceInspector } from "./components/EvidenceInspector";
 import { RunProgress } from "./components/RunProgress";
 import { VerdictPanel } from "./components/VerdictPanel";
 import { WalletFlowForm } from "./components/WalletFlowForm";
-import { WalletAccess } from "./components/WalletAccess";
+import { ConnectHub } from "./components/ConnectHub";
 import { PixelCard } from "./components/reactbits/PixelCard";
 import { Threads } from "./components/reactbits/Threads";
 import type { AgentCapabilities, AuditResult, ClaimAuditRequest, RequestPhase, WalletFlowFilters, WalletFlowResult, WalletSession } from "./domain/apiTypes";
@@ -99,6 +99,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [walletSession, setWalletSessionState] = useState<WalletSession | null>(readWalletSession);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [connectMode, setConnectMode] = useState<"web" | "agent">("web");
+  const [credits, setCredits] = useState<number | null>(null);
   const [agentCapabilities, setAgentCapabilities] = useState<AgentCapabilities | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installHint, setInstallHint] = useState(false);
@@ -130,6 +133,12 @@ export default function App() {
     setWalletSessionState(session);
     if (session) window.sessionStorage.setItem("v52-wallet-session", JSON.stringify(session));
     else window.sessionStorage.removeItem("v52-wallet-session");
+    if (!session) setCredits(null);
+  };
+
+  const openConnect = (nextMode: "web" | "agent" = "web") => {
+    setConnectMode(nextMode);
+    setConnectOpen(true);
   };
 
   useEffect(() => () => {
@@ -179,11 +188,13 @@ export default function App() {
     setError(null);
     try {
       const next = await vector52Client.webWalletFlow(address, limit, filters, walletSession.access_token, controller.signal);
-      setResult(next);
+      setResult(next.result);
+      if (next.credits_remaining !== undefined && next.credits_remaining !== null) setCredits(next.credits_remaining);
       setPhase("SUCCESS");
     } catch (nextError) {
       if (nextError instanceof DOMException && nextError.name === "AbortError") return;
       if (nextError instanceof Vector52ApiError && nextError.status === 401) setWalletSession(null);
+      if (nextError instanceof Vector52ApiError && nextError.status === 402) openConnect("web");
       setError(errorMessage(nextError, locale));
       setPhase("ERROR");
     }
@@ -228,12 +239,28 @@ export default function App() {
             <button type="button" aria-pressed={locale === "es"} onClick={() => setLocale("es")}>ES</button>
             <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>EN</button>
           </div>
+          <button className="connect-action" type="button" onClick={() => openConnect("web")}>
+            <span className={walletSession ? "connect-status is-connected" : "connect-status"} />
+            <span>{walletSession ? `${credits ?? "—"} ${locale === "es" ? "consultas" : "requests"}` : "Connect"}</span>
+            <ChevronDown size={14} />
+          </button>
           <button className="install-action" type="button" onClick={() => void requestInstall()} disabled={isInstalled}>
             <Download className="install-icon" size={16} aria-hidden="true" />
             {isInstalled ? copy.installed : copy.install}
           </button>
         </div>
       </header>
+
+      <ConnectHub
+        locale={locale}
+        open={connectOpen}
+        initialMode={connectMode}
+        session={walletSession}
+        agentCapabilities={agentCapabilities}
+        onClose={() => setConnectOpen(false)}
+        onSession={setWalletSession}
+        onCredits={setCredits}
+      />
 
       {installHint ? (
         <div className="install-toast" role="status">
@@ -280,13 +307,14 @@ export default function App() {
             <div className="access-card-head"><span><Globe2 size={17} />WEB USER</span><b>{walletSession ? "READY" : "SIGN-IN"}</b></div>
             <h3>{locale === "es" ? "Investigación interactiva" : "Interactive investigation"}</h3>
             <p>{locale === "es" ? "Reown conecta la wallet. Una firma de mensaje crea una sesión temporal; nunca se solicita una private key." : "Reown connects the wallet. A message signature creates a temporary session; no private key is ever requested."}</p>
-            <WalletAccess locale={locale} session={walletSession} onSession={setWalletSession} />
+            <button className="access-open-action" type="button" onClick={() => openConnect("web")}><Globe2 size={16} />{walletSession ? (locale === "es" ? "Administrar acceso" : "Manage access") : (locale === "es" ? "Conectar wallet" : "Connect wallet")}<ArrowRight size={15} /></button>
           </article>
           <article className="access-card access-agent">
             <div className="access-card-head"><span><Bot size={17} />MCP AGENT</span><b className={agentCapabilities?.ready ? "is-ready" : "is-pending"}>{agentCapabilities?.ready ? "READY" : "CONFIG"}</b></div>
             <h3>{locale === "es" ? "Investigación autónoma pagada" : "Paid autonomous investigation"}</h3>
             <p>{locale === "es" ? "Claude, Codex u otro cliente MCP solicita el trabajo; el cliente del agente firma y paga USDC en Fuji antes de ejecutarlo." : "Claude, Codex or another MCP client requests work; the agent client signs and pays USDC on Fuji before execution."}</p>
             <div className="agent-route"><Zap size={15} /><code>POST /v1/agent/investigations/wallet-flow</code><span>{agentCapabilities?.amount_atomic ?? "—"} atomic</span></div>
+            <button className="access-open-action agent" type="button" onClick={() => openConnect("agent")}><Bot size={16} />{locale === "es" ? "Configurar agente" : "Configure agent"}<ArrowRight size={15} /></button>
           </article>
         </section>
 

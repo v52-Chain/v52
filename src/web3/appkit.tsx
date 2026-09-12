@@ -10,9 +10,10 @@ export const reownConfigured = reownProjectId.length > 0;
 
 const networks = [mainnet, avalancheFuji] as const;
 const queryClient = new QueryClient();
-const wagmiAdapter = reownConfigured
+export const wagmiAdapter = reownConfigured
   ? new WagmiAdapter({ networks: [...networks], projectId: reownProjectId })
   : null;
+export const wagmiConfig = wagmiAdapter?.wagmiConfig ?? null;
 
 if (wagmiAdapter) {
   createAppKit({
