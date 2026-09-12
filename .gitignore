@@ -1,0 +1,29 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node / Vite
+node_modules/
+dist/
+coverage/
+.vite/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+*.tmp
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# Test/runtime artifacts
+test-results/
