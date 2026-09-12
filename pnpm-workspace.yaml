@@ -1,0 +1,7 @@
+allowBuilds:
+  "@reown/appkit": false # only runs a non-essential version check
+  bufferutil: false # optional native WebSocket acceleration; JS fallback is sufficient
+  utf-8-validate: false # optional native WebSocket validation; JS fallback is sufficient
+  keccak: false # not used by the browser signing path; Viem handles EVM hashing
+overrides:
+  "@wagmi/connectors": "6.2.0"

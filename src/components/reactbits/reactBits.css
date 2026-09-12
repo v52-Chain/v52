@@ -9,8 +9,8 @@
 .v52-dock-label { position: absolute; top: -34px; left: 50%; width: max-content; padding: 6px 8px; border: 1px solid rgba(124,234,215,.28); border-radius: 6px; color: #e9f2f4; background: rgba(8,14,23,.94); transform: translateX(-50%); font: 500 .57rem/1 "DM Mono", monospace; }
 
 .pixel-card { position: relative; min-width: 0; overflow: hidden; isolation: isolate; outline: none; }
-.pixel-canvas { position: absolute; z-index: 0; inset: 0; display: block; width: 100%; height: 100%; opacity: .72; }
-.pixel-card::before { content: ""; position: absolute; z-index: 0; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(12,31,38,.98), transparent 76%); transition: opacity 700ms cubic-bezier(.5,1,.89,1); }
+.pixel-canvas { position: absolute; z-index: 0; inset: 0; display: block; width: 100%; height: 100%; opacity: .34; }
+.pixel-card::before { content: ""; position: absolute; z-index: 0; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(102,220,211,.12), transparent 76%); transition: opacity 700ms cubic-bezier(.5,1,.89,1); }
 .pixel-card:hover::before, .pixel-card:focus-within::before { opacity: 1; }
 .pixel-card-content { position: relative; z-index: 1; height: 100%; }
 .v52-pixel-card { height: 100%; border: 1px solid rgba(95,106,126,.24); border-radius: 13px; background: #f9f9fd; transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease; }

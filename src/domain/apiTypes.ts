@@ -136,6 +136,43 @@ export interface HealthResponse {
   version: string;
 }
 
+export interface WalletFlowFilters {
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface WalletChallenge {
+  nonce: string;
+  message: string;
+  expires_at: string;
+}
+
+export interface WalletSession {
+  access_token: string;
+  token_type: "bearer";
+  address: string;
+  chain_id: number;
+  expires_at: string;
+}
+
+export interface WalletVerifyInput {
+  nonce: string;
+  message: string;
+  signature: string;
+}
+
+export interface AgentCapabilities {
+  channel: "AGENT_X402";
+  ready: boolean;
+  endpoint: string;
+  payment_protocol: "x402";
+  network: string;
+  asset: string;
+  amount_atomic: string;
+  automatic_payment_owner: "MCP_CLIENT";
+  warnings: string[];
+}
+
 export interface FlowTransfer {
   transfer_id: string;
   direction: "IN" | "OUT";
@@ -167,6 +204,9 @@ export interface WalletFlowResult {
     returned_incoming: number;
     returned_outgoing: number;
     truncated: boolean;
+    from_date?: string | null;
+    to_date?: string | null;
+    max_pages_per_direction?: number;
   };
   warnings: string[];
 }

@@ -13,7 +13,7 @@ describe("Vector52Client", () => {
     });
   });
 
-  it("encodes a public wallet and limit in the flow endpoint", async () => {
+  it("sends a wallet-authenticated investigation to the web boundary", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ address: "0xabc" }), {
         status: 200,
@@ -23,11 +23,39 @@ describe("Vector52Client", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = new Vector52Client("http://localhost:8000/");
 
-    await client.walletFlow("  0xabc  ", 10);
+    await client.webWalletFlow("  0xabc  ", 10, {}, "browser-session");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/v1/wallets/1/0xabc/flow?limit=10",
-      expect.objectContaining({ headers: expect.objectContaining({ Accept: "application/json" }) })
+      "http://localhost:8000/v1/web/investigations/wallet-flow",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer browser-session" }),
+        body: expect.stringContaining('"target_address":"0xabc"')
+      })
     );
+  });
+
+  it("sends the selected evidence time window", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ address: "0xabc" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new Vector52Client("http://localhost:8000");
+
+    await client.webWalletFlow(
+      "0xabc",
+      25,
+      { fromDate: "2026-08-01", toDate: "2026-08-31" },
+      "browser-session"
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      from_date: "2026-08-01",
+      to_date: "2026-08-31"
+    });
   });
 });

@@ -5,6 +5,7 @@ import ForceGraph2D, {
   type NodeObject
 } from "react-force-graph-2d";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Braces, Copy, ExternalLink, Maximize2, Network, RefreshCw, Table2, ZoomIn, ZoomOut } from "lucide-react";
 import type { FlowTransfer, WalletFlowResult } from "../domain/apiTypes";
 import type { Locale } from "../domain/locale";
 
@@ -110,7 +111,6 @@ export function WalletFlowGraph({ result, locale }: { result: WalletFlowResult; 
     dynamicGraph: "Grafo dinámico de transferencias", graphControls: "Controles del grafo", zoomIn: "Acercar", zoomOut: "Alejar", fit: "Ajustar grafo", reset: "Reiniciar física",
     hint: "Simulación activa · arrastra nodos · rueda para zoom · clic para investigar", overview: "RESUMEN DE RESULTADOS", nodes: "Nodos", relationships: "Relaciones", selected: "Evidencia seleccionada",
     copyAddress: "Copiar dirección", direction: "Dirección", incoming: "Ingreso", outgoing: "Egreso", asset: "Activo", amount: "Monto visible", openTx: "Abrir transacción",
-    source: "FUENTE", engine: "MOTOR VISUAL", acquired: "ADQUIRIDO", status: "ESTADO", limited: "MUESTRA LIMITADA", complete: "MUESTRA COMPLETA",
     counterpartyCol: "Contraparte", relationshipCol: "Relación", block: "Bloque", evidence: "Evidencia"
   } : {
     wallet: "Investigated wallet", counterparty: "Counterparty", received: "Received transfer", sent: "Sent transfer",
@@ -118,7 +118,6 @@ export function WalletFlowGraph({ result, locale }: { result: WalletFlowResult; 
     dynamicGraph: "Dynamic transfer graph", graphControls: "Graph controls", zoomIn: "Zoom in", zoomOut: "Zoom out", fit: "Fit graph", reset: "Reset physics",
     hint: "Live simulation · drag nodes · scroll to zoom · click to investigate", overview: "RESULTS OVERVIEW", nodes: "Nodes", relationships: "Relationships", selected: "Selected evidence",
     copyAddress: "Copy address", direction: "Direction", incoming: "Incoming", outgoing: "Outgoing", asset: "Asset", amount: "Visible amount", openTx: "Open transaction",
-    source: "SOURCE", engine: "VISUAL ENGINE", acquired: "ACQUIRED", status: "STATUS", limited: "LIMITED SAMPLE", complete: "COMPLETE SAMPLE",
     counterpartyCol: "Counterparty", relationshipCol: "Relationship", block: "Block", evidence: "Evidence"
   };
   const incoming = useMemo(() => aggregate(result.incoming, "IN"), [result.incoming]);
@@ -346,7 +345,7 @@ export function WalletFlowGraph({ result, locale }: { result: WalletFlowResult; 
         <div className="neo-tabs" role="tablist" aria-label={copy.results}>
           {(["graph", "table", "raw"] as const).map((mode) => (
             <button key={mode} type="button" role="tab" aria-selected={view === mode} onClick={() => setView(mode)}>
-              {mode === "graph" ? "Force Graph" : mode === "table" ? copy.table : "RAW"}
+              {mode === "graph" ? <><Network size={14} />Graph</> : mode === "table" ? <><Table2 size={14} />{copy.table}</> : <><Braces size={14} />RAW</>}
             </button>
           ))}
         </div>
@@ -399,10 +398,10 @@ export function WalletFlowGraph({ result, locale }: { result: WalletFlowResult; 
                 />
               </div>
               <div className="graph-controls" aria-label={copy.graphControls}>
-                <button type="button" onClick={() => graphRef.current?.zoom((graphRef.current?.zoom() ?? 1) * 1.3, 250)} aria-label={copy.zoomIn}>+</button>
-                <button type="button" onClick={() => graphRef.current?.zoom((graphRef.current?.zoom() ?? 1) * 0.77, 250)} aria-label={copy.zoomOut}>−</button>
-                <button type="button" onClick={() => graphRef.current?.zoomToFit(450, 58)} aria-label={copy.fit}>⌗</button>
-                <button type="button" onClick={resetLayout} aria-label={copy.reset}>↻</button>
+                <button type="button" onClick={() => graphRef.current?.zoom((graphRef.current?.zoom() ?? 1) * 1.3, 250)} aria-label={copy.zoomIn}><ZoomIn size={16} /></button>
+                <button type="button" onClick={() => graphRef.current?.zoom((graphRef.current?.zoom() ?? 1) * 0.77, 250)} aria-label={copy.zoomOut}><ZoomOut size={16} /></button>
+                <button type="button" onClick={() => graphRef.current?.zoomToFit(450, 58)} aria-label={copy.fit}><Maximize2 size={16} /></button>
+                <button type="button" onClick={resetLayout} aria-label={copy.reset}><RefreshCw size={16} /></button>
               </div>
               <div className="drag-hint"><i /> {copy.hint}</div>
             </>
@@ -429,24 +428,18 @@ export function WalletFlowGraph({ result, locale }: { result: WalletFlowResult; 
           <div className="overview-group selected-record">
             <h3>{copy.selected}</h3>
             <span className={`direction-pill ${selected.direction === "OUT" ? "pill-out" : "pill-in"}`}>{selected.title}</span>
-            {selected.address ? <><code>{selected.address}</code><button type="button" onClick={() => void navigator.clipboard.writeText(selected.address!)}>{copy.copyAddress}</button></> : null}
+            {selected.address ? <><code>{selected.address}</code><button type="button" onClick={() => void navigator.clipboard.writeText(selected.address!)}><Copy size={13} />{copy.copyAddress}</button></> : null}
             <dl>
               {selected.direction ? <><dt>{copy.direction}</dt><dd>{selected.direction === "IN" ? copy.incoming : copy.outgoing}</dd></> : null}
               {selected.asset ? <><dt>{copy.asset}</dt><dd>{selected.asset}</dd></> : null}
               {selected.total !== undefined ? <><dt>{copy.amount}</dt><dd>{displayAmount(selected.total, selected.asset)}</dd></> : null}
               {selected.count !== undefined ? <><dt>{copy.transfers}</dt><dd>{selected.count}</dd></> : null}
             </dl>
-            {selected.txHash ? <a href={`https://etherscan.io/tx/${selected.txHash}`} target="_blank" rel="noreferrer">{copy.openTx} ↗</a> : null}
+            {selected.txHash ? <a href={`https://etherscan.io/tx/${selected.txHash}`} target="_blank" rel="noreferrer">{copy.openTx}<ExternalLink size={13} /></a> : null}
           </div>
         </aside>
       </div>
 
-      <div className="neo-footer">
-        <div><span>{copy.source}</span><strong>Alchemy Transfers API</strong></div>
-        <div><span>{copy.engine}</span><strong>react-force-graph · d3-force</strong></div>
-        <div><span>{copy.acquired}</span><strong>{new Date(result.acquired_at).toLocaleString(locale === "es" ? "es-BO" : "en-US")}</strong></div>
-        <div><span>{copy.status}</span><strong>{result.limits.truncated ? copy.limited : copy.complete}</strong></div>
-      </div>
       <ul className="flow-warnings">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
     </section>
   );
@@ -467,7 +460,7 @@ function TransferTable({ transfers, locale }: { transfers: FlowTransfer[]; local
             <td>{transfer.direction === "IN" ? copy.received : copy.sent}</td>
             <td>{transfer.value ?? "?"} {transfer.asset}</td>
             <td>{transfer.block_number ?? "UNKNOWN"}</td>
-            <td><a href={`https://etherscan.io/tx/${transfer.tx_hash}`} target="_blank" rel="noreferrer">TX ↗</a></td>
+            <td><a href={`https://etherscan.io/tx/${transfer.tx_hash}`} target="_blank" rel="noreferrer">TX <ExternalLink size={12} /></a></td>
           </tr>
         ))}</tbody>
       </table>

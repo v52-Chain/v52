@@ -1,18 +1,30 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { ArrowRight, Bot, Download, FileCheck2, Globe2, Network, PlugZap, Search, ShieldCheck, Waypoints, Zap } from "lucide-react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
 import { AuditForm } from "./components/AuditForm";
 import { EvidenceInspector } from "./components/EvidenceInspector";
 import { RunProgress } from "./components/RunProgress";
 import { VerdictPanel } from "./components/VerdictPanel";
 import { WalletFlowForm } from "./components/WalletFlowForm";
-import { Dock } from "./components/reactbits/Dock";
+import { WalletAccess } from "./components/WalletAccess";
 import { PixelCard } from "./components/reactbits/PixelCard";
 import { Threads } from "./components/reactbits/Threads";
-import type { AuditResult, ClaimAuditRequest, RequestPhase, WalletFlowResult } from "./domain/apiTypes";
+import type { AgentCapabilities, AuditResult, ClaimAuditRequest, RequestPhase, WalletFlowFilters, WalletFlowResult, WalletSession } from "./domain/apiTypes";
 import type { Locale } from "./domain/locale";
 
 type HealthState = "checking" | "online" | "degraded" | "offline";
 type InvestigationMode = "wallet" | "claim";
+
+const readWalletSession = (): WalletSession | null => {
+  try {
+    const raw = window.sessionStorage.getItem("v52-wallet-session");
+    if (!raw) return null;
+    const session = JSON.parse(raw) as WalletSession;
+    return Date.parse(session.expires_at) > Date.now() ? session : null;
+  } catch {
+    return null;
+  }
+};
 
 const WalletFlowGraph = lazy(() =>
   import("./components/WalletFlowGraph").then((module) => ({ default: module.WalletFlowGraph }))
@@ -86,18 +98,14 @@ export default function App() {
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [walletSession, setWalletSessionState] = useState<WalletSession | null>(readWalletSession);
+  const [agentCapabilities, setAgentCapabilities] = useState<AgentCapabilities | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installHint, setInstallHint] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const activeRequest = useRef<AbortController | null>(null);
   const activeAuditRequest = useRef<AbortController | null>(null);
   const copy = COPY[locale];
-  const dockItems = [
-    { icon: "⌂", label: locale === "es" ? "Inicio" : "Home", href: "#top" },
-    { icon: "⌕", label: copy.investigate, href: "#investigate" },
-    { icon: "◇", label: copy.method, href: "#method" },
-    { icon: "⌘", label: copy.integrations, href: "#integrations" }
-  ];
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -111,6 +119,18 @@ export default function App() {
       .catch(() => setHealth("offline"));
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    vector52Client.agentCapabilities(controller.signal).then(setAgentCapabilities).catch(() => setAgentCapabilities(null));
+    return () => controller.abort();
+  }, []);
+
+  const setWalletSession = (session: WalletSession | null) => {
+    setWalletSessionState(session);
+    if (session) window.sessionStorage.setItem("v52-wallet-session", JSON.stringify(session));
+    else window.sessionStorage.removeItem("v52-wallet-session");
+  };
 
   useEffect(() => () => {
     activeRequest.current?.abort();
@@ -146,7 +166,11 @@ export default function App() {
     if (choice.outcome === "accepted") setInstallPrompt(null);
   };
 
-  const investigate = async (address: string, limit: number) => {
+  const investigate = async (address: string, limit: number, filters: WalletFlowFilters) => {
+    if (!walletSession) {
+      setError(locale === "es" ? "Conecta y verifica tu wallet para abrir una investigación web." : "Connect and verify your wallet to open a web investigation.");
+      return;
+    }
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -154,11 +178,12 @@ export default function App() {
     setResult(null);
     setError(null);
     try {
-      const next = await vector52Client.walletFlow(address, limit, controller.signal);
+      const next = await vector52Client.webWalletFlow(address, limit, filters, walletSession.access_token, controller.signal);
       setResult(next);
       setPhase("SUCCESS");
     } catch (nextError) {
       if (nextError instanceof DOMException && nextError.name === "AbortError") return;
+      if (nextError instanceof Vector52ApiError && nextError.status === 401) setWalletSession(null);
       setError(errorMessage(nextError, locale));
       setPhase("ERROR");
     }
@@ -190,9 +215,9 @@ export default function App() {
           <span><strong>VECTOR52</strong><small>FORENSIC FLOW</small></span>
         </a>
         <nav className="main-nav" aria-label={copy.nav}>
-          <a href="#investigate">{copy.investigate}</a>
-          <a href="#method">{copy.method}</a>
-          <a href="#integrations">{copy.integrations}</a>
+          <a href="#investigate"><Search size={15} />{copy.investigate}</a>
+          <a href="#method"><Waypoints size={15} />{copy.method}</a>
+          <a href="#integrations"><PlugZap size={15} />{copy.integrations}</a>
         </nav>
         <div className="topbar-actions">
           <span className={`api-chip api-${health}`} aria-label={`API ${health}`} title={`API ${health}`}>
@@ -204,13 +229,11 @@ export default function App() {
             <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>EN</button>
           </div>
           <button className="install-action" type="button" onClick={() => void requestInstall()} disabled={isInstalled}>
-            <span className="install-icon" aria-hidden="true">↓</span>
+            <Download className="install-icon" size={16} aria-hidden="true" />
             {isInstalled ? copy.installed : copy.install}
           </button>
         </div>
       </header>
-
-      <Dock items={dockItems} ariaLabel={locale === "es" ? "Navegación rápida" : "Quick navigation"} />
 
       {installHint ? (
         <div className="install-toast" role="status">
@@ -221,40 +244,50 @@ export default function App() {
       ) : null}
 
       <main id="top">
-        <section className="flow-hero detective-hero">
-          <Threads color={[.34, .9, .8]} amplitude={.82} distance={.14} enableMouseInteraction className="hero-threads" />
-          <div className="hero-badge"><span /> {copy.caseFile}<strong>{copy.liveTrace}</strong></div>
-          <div className="flow-hero-grid">
-            <div className="hero-copy-block">
-              <div className="case-index"><span>CASE</span><strong>52</strong><i /></div>
-              <p className="eyebrow">{copy.eyebrow}</p>
-              <h1>{copy.titleA}<br /><em>{copy.titleB}</em></h1>
-              <p className="hero-lede">{copy.lede}</p>
-              <div className="hero-actions">
-                <a className="primary-link" href="#investigate">{copy.investigateWallet} <span>→</span></a>
-                <a className="secondary-link" href="#method">{copy.forensicLimits}</a>
-              </div>
+        <section className="flow-hero desktop-hero">
+          <Threads color={[.34, .48, .96]} amplitude={.46} distance={.18} enableMouseInteraction className="hero-threads" />
+          <div className="desktop-hero-copy">
+            <div className="hero-status"><span className="live-dot" />{copy.caseFile}</div>
+            <p className="eyebrow">{copy.eyebrow}</p>
+            <h1>{copy.titleA}<br /><em>{copy.titleB}</em></h1>
+            <p className="hero-lede">{copy.lede}</p>
+            <div className="hero-actions">
+              <a className="primary-link" href="#investigate"><Search size={18} />{copy.investigateWallet}<ArrowRight size={17} /></a>
+              <a className="secondary-link" href="#method"><FileCheck2 size={17} />{copy.forensicLimits}</a>
             </div>
-            <div className="investigation-console" aria-hidden="true">
-              <div className="console-meta"><span>CHAIN://ETH-MAINNET</span><span>BLOCK 23919874</span></div>
-              <div className="case-stage">
-                <div className="hero-eclipse" />
-                <div className="hero-vector">V</div>
-                <div className="scan-beam" />
-                <div className="target-reticle"><span>V52</span></div>
-                <i className="trace-line trace-a" /><i className="trace-line trace-b" /><i className="trace-line trace-c" /><i className="trace-line trace-d" />
-                <span className="trace-node node-a">01</span><span className="trace-node node-b">02</span>
-                <span className="trace-node out node-c">03</span><span className="trace-node out node-d">04</span>
-                <div className="evidence-tile tile-a"><small>{copy.traceOne}</small><strong>{copy.traceOneText}</strong><span>0x8d8A…6045</span></div>
-                <div className="evidence-tile tile-b"><small>{copy.traceTwo}</small><strong>{copy.traceTwoText}</strong><span>HASH VERIFIED</span></div>
-                <div className="confidence-dial"><span>100%</span><small>{copy.confidence}</small><b>{copy.confidenceText}</b></div>
-              </div>
-              <div className="console-foot"><span>● {copy.signal}</span><span>OBSERVE / PRESERVE / VERIFY</span></div>
+            <div className="hero-trust-row">
+              <span><ShieldCheck size={16} />{copy.principles[1]}</span>
+              <span><Network size={16} />{copy.principles[2]}</span>
             </div>
+          </div>
+          <div className="hero-visual" aria-hidden="true">
+            <div className="desktop-window-bar"><i /><i /><i /><span>VECTOR52 / CASE WORKSPACE</span></div>
+            <img src="/images/vector52-cover.jpeg" alt="" />
+            <div className="hero-evidence-card"><small>{copy.signal}</small><strong>{copy.traceTwoText}</strong><span>OBSERVE · PRESERVE · VERIFY</span></div>
           </div>
           <div className="principle-strip">
             {copy.principles.map((principle, index) => <span key={principle}><strong>0{index + 1}</strong> {principle}</span>)}
           </div>
+        </section>
+
+        <section className="access-channels" aria-label={locale === "es" ? "Canales de acceso" : "Access channels"}>
+          <div className="access-intro">
+            <p className="eyebrow">VECTOR52 ACCESS LAYER</p>
+            <h2>{locale === "es" ? "Una inteligencia. Dos formas de operar." : "One intelligence core. Two ways to operate."}</h2>
+            <p>{locale === "es" ? "La web autentica personas mediante firma; el canal MCP autoriza trabajo autónomo mediante pago x402." : "The web authenticates people with a signature; the MCP channel authorizes autonomous work through x402 payment."}</p>
+          </div>
+          <article className="access-card access-web">
+            <div className="access-card-head"><span><Globe2 size={17} />WEB USER</span><b>{walletSession ? "READY" : "SIGN-IN"}</b></div>
+            <h3>{locale === "es" ? "Investigación interactiva" : "Interactive investigation"}</h3>
+            <p>{locale === "es" ? "Reown conecta la wallet. Una firma de mensaje crea una sesión temporal; nunca se solicita una private key." : "Reown connects the wallet. A message signature creates a temporary session; no private key is ever requested."}</p>
+            <WalletAccess locale={locale} session={walletSession} onSession={setWalletSession} />
+          </article>
+          <article className="access-card access-agent">
+            <div className="access-card-head"><span><Bot size={17} />MCP AGENT</span><b className={agentCapabilities?.ready ? "is-ready" : "is-pending"}>{agentCapabilities?.ready ? "READY" : "CONFIG"}</b></div>
+            <h3>{locale === "es" ? "Investigación autónoma pagada" : "Paid autonomous investigation"}</h3>
+            <p>{locale === "es" ? "Claude, Codex u otro cliente MCP solicita el trabajo; el cliente del agente firma y paga USDC en Fuji antes de ejecutarlo." : "Claude, Codex or another MCP client requests work; the agent client signs and pays USDC on Fuji before execution."}</p>
+            <div className="agent-route"><Zap size={15} /><code>POST /v1/agent/investigations/wallet-flow</code><span>{agentCapabilities?.amount_atomic ?? "—"} atomic</span></div>
+          </article>
         </section>
 
         <section className="investigation-switch" id="investigate" aria-label={locale === "es" ? "Tipo de investigación" : "Investigation type"}>
@@ -273,7 +306,12 @@ export default function App() {
         </section>
 
         {mode === "wallet" ? (
-          <WalletFlowForm locale={locale} disabled={phase === "RUNNING"} onSubmit={(address, limit) => void investigate(address, limit)} />
+          <WalletFlowForm
+            locale={locale}
+            busy={phase === "RUNNING"}
+            accessLocked={!walletSession}
+            onSubmit={(address, limit, filters) => void investigate(address, limit, filters)}
+          />
         ) : (
           <section className="workspace-grid claim-workspace">
             <AuditForm locale={locale} disabled={auditPhase === "RUNNING"} onSubmit={(request) => void auditClaim(request)} />

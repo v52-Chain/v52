@@ -1,4 +1,4 @@
-import type { AuditResult, ClaimAuditRequest, HealthResponse, WalletFlowResult } from "../domain/apiTypes";
+import type { AgentCapabilities, AuditResult, ClaimAuditRequest, HealthResponse, WalletChallenge, WalletFlowFilters, WalletFlowResult, WalletSession, WalletVerifyInput } from "../domain/apiTypes";
 
 export class Vector52ApiError extends Error {
   readonly status: number;
@@ -34,12 +34,43 @@ export class Vector52Client {
     });
   }
 
-  async walletFlow(address: string, limit = 25, signal?: AbortSignal): Promise<WalletFlowResult> {
-    const encodedAddress = encodeURIComponent(address.trim());
-    return this.request<WalletFlowResult>(
-      `/v1/wallets/1/${encodedAddress}/flow?limit=${limit}`,
-      { signal }
-    );
+  async walletChallenge(address: string, chainId: 1 | 43113): Promise<WalletChallenge> {
+    return this.request<WalletChallenge>("/v1/auth/wallet/challenge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, chain_id: chainId })
+    });
+  }
+
+  async walletVerify(payload: WalletVerifyInput): Promise<WalletSession> {
+    return this.request<WalletSession>("/v1/auth/wallet/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async webWalletFlow(address: string, limit: number, filters: WalletFlowFilters, accessToken: string, signal?: AbortSignal): Promise<WalletFlowResult> {
+    const response = await this.request<{ result: WalletFlowResult }>("/v1/web/investigations/wallet-flow", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        target_address: address.trim(),
+        chain_id: 1,
+        limit,
+        from_date: filters.fromDate,
+        to_date: filters.toDate
+      }),
+      signal
+    });
+    return response.result;
+  }
+
+  async agentCapabilities(signal?: AbortSignal): Promise<AgentCapabilities> {
+    return this.request<AgentCapabilities>("/v1/agent/capabilities", { signal });
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
