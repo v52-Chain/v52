@@ -1,29 +1,71 @@
-import cytoscape, { type Core, type ElementDefinition, type EventObject } from "cytoscape";
-import { useEffect, useMemo, useRef, useState } from "react";
+import ForceGraph2D, {
+  type ForceGraphMethods,
+  type GraphData,
+  type LinkObject,
+  type NodeObject
+} from "react-force-graph-2d";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FlowTransfer, WalletFlowResult } from "../domain/apiTypes";
 
 type ViewMode = "graph" | "table" | "raw";
+type Direction = "IN" | "OUT";
 
 interface FlowNode {
   id: string;
   address: string;
   asset: string;
-  direction: "IN" | "OUT";
+  direction: Direction;
   count: number;
   total: number | null;
   transfers: FlowTransfer[];
+}
+
+interface RfgNode extends NodeObject {
+  id: string;
+  kind: "wallet" | "counterparty";
+  address: string;
+  direction?: Direction;
+  asset?: string;
+  total?: number | null;
+  count: number;
+  label: string;
+  color: string;
+}
+
+interface RfgLink extends LinkObject<RfgNode> {
+  id: string;
+  source: string | RfgNode;
+  target: string | RfgNode;
+  direction: Direction;
+  address: string;
+  asset: string;
+  total: number | null;
+  count: number;
+  txHash?: string;
+  label: string;
+  color: string;
 }
 
 interface SelectedEvidence {
   kind: "wallet" | "counterparty" | "relationship";
   title: string;
   address?: string;
-  direction?: "IN" | "OUT";
+  direction?: Direction;
   asset?: string;
   total?: number | null;
   count?: number;
   txHash?: string;
 }
+
+const PALETTE = {
+  income: "#2dd4ae",
+  incomeDark: "#123f38",
+  expense: "#ff746c",
+  expenseDark: "#4b272e",
+  wallet: "#8474f4",
+  paper: "#f7f7fb",
+  canvas: "#1d1f24"
+};
 
 const short = (address: string) => address.length > 16 ? `${address.slice(0, 8)}…${address.slice(-6)}` : address;
 const displayAmount = (value: number | null | undefined, asset = "") =>
@@ -31,7 +73,7 @@ const displayAmount = (value: number | null | undefined, asset = "") =>
     ? asset
     : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value)} ${asset}`.trim();
 
-function aggregate(transfers: FlowTransfer[], direction: "IN" | "OUT"): FlowNode[] {
+function aggregate(transfers: FlowTransfer[], direction: Direction): FlowNode[] {
   const nodes = new Map<string, Omit<FlowNode, "id">>();
   for (const transfer of transfers) {
     const key = `${transfer.counterparty}:${transfer.asset}:${direction}`;
@@ -52,22 +94,12 @@ function aggregate(transfers: FlowTransfer[], direction: "IN" | "OUT"): FlowNode
   }
   return [...nodes.values()]
     .sort((a, b) => b.count - a.count)
-    .slice(0, 14)
+    .slice(0, 18)
     .map((node, index) => ({ ...node, id: `${direction.toLowerCase()}-${index}` }));
 }
 
-function positions(nodes: FlowNode[], side: "left" | "right", height = 620) {
-  if (nodes.length === 0) return new Map<string, { x: number; y: number }>();
-  const columns = nodes.length > 8 ? 2 : 1;
-  const rows = Math.ceil(nodes.length / columns);
-  const usable = height - 120;
-  return new Map(nodes.map((node, index) => {
-    const column = Math.floor(index / rows);
-    const row = index % rows;
-    const x = side === "left" ? 115 + column * 145 : 885 - column * 145;
-    const y = rows === 1 ? height / 2 : 60 + (row * usable) / (rows - 1);
-    return [node.id, { x, y }];
-  }));
+function nodeFromEndpoint(endpoint: string | RfgNode): RfgNode | null {
+  return typeof endpoint === "object" ? endpoint : null;
 }
 
 export function WalletFlowGraph({ result }: { result: WalletFlowResult }) {
@@ -81,8 +113,52 @@ export function WalletFlowGraph({ result }: { result: WalletFlowResult }) {
     address: result.address,
     count: result.incoming.length + result.outgoing.length
   });
-  const graphRef = useRef<HTMLDivElement | null>(null);
-  const cyRef = useRef<Core | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [hoveredLink, setHoveredLink] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 900, height: 680 });
+  const graphHostRef = useRef<HTMLDivElement | null>(null);
+  const graphRef = useRef<ForceGraphMethods<RfgNode, RfgLink> | undefined>(undefined);
+
+  const graphData = useMemo<GraphData<RfgNode, RfgLink>>(() => {
+    const nodes: RfgNode[] = [{
+      id: "wallet",
+      kind: "wallet",
+      address: result.address,
+      count: result.incoming.length + result.outgoing.length,
+      label: `V52 · ${short(result.address)}`,
+      color: PALETTE.wallet
+    }];
+    const links: RfgLink[] = [];
+
+    for (const node of allNodes) {
+      const isIncoming = node.direction === "IN";
+      nodes.push({
+        id: node.id,
+        kind: "counterparty",
+        address: node.address,
+        direction: node.direction,
+        asset: node.asset,
+        total: node.total,
+        count: node.count,
+        label: `${short(node.address)} · ${displayAmount(node.total, node.asset)}`,
+        color: isIncoming ? PALETTE.income : PALETTE.expense
+      });
+      links.push({
+        id: `edge-${node.id}`,
+        source: isIncoming ? node.id : "wallet",
+        target: isIncoming ? "wallet" : node.id,
+        direction: node.direction,
+        address: node.address,
+        asset: node.asset,
+        total: node.total,
+        count: node.count,
+        txHash: node.transfers[0]?.tx_hash,
+        label: `${isIncoming ? "RECEIVED" : "SENT"} · ${displayAmount(node.total, node.asset)}`,
+        color: isIncoming ? PALETTE.income : PALETTE.expense
+      });
+    }
+    return { nodes, links };
+  }, [allNodes, result]);
 
   const assetCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -92,215 +168,214 @@ export function WalletFlowGraph({ result }: { result: WalletFlowResult }) {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7);
   }, [result]);
 
+  useLayoutEffect(() => {
+    const host = graphHostRef.current;
+    if (!host) return;
+    const measure = () => setDimensions({ width: Math.max(host.clientWidth, 320), height: Math.max(host.clientHeight, 560) });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [view]);
+
   useEffect(() => {
-    if (view !== "graph" || !graphRef.current) return;
+    if (view !== "graph") return;
+    const timer = window.setTimeout(() => {
+      const graph = graphRef.current;
+      const charge = graph?.d3Force("charge");
+      const link = graph?.d3Force("link");
+      charge?.strength?.(-250);
+      link?.distance?.(150);
+      graph?.d3ReheatSimulation();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [graphData, view]);
 
-    const incomingPositions = positions(incoming, "left");
-    const outgoingPositions = positions(outgoing, "right");
-    const elements: ElementDefinition[] = [
-      {
-        data: {
-          id: "wallet",
-          label: `V52\n${short(result.address)}`,
-          kind: "wallet",
-          address: result.address,
-          count: result.incoming.length + result.outgoing.length
-        },
-        position: { x: 500, y: 310 },
-        classes: "wallet"
-      }
-    ];
+  const selectNode = (node: RfgNode) => {
+    setSelected({
+      kind: node.kind,
+      title: node.kind === "wallet" ? "Wallet investigada" : "Contraparte",
+      address: node.address,
+      direction: node.direction,
+      asset: node.asset,
+      total: node.total,
+      count: node.count
+    });
+    if (node.x !== undefined && node.y !== undefined) {
+      graphRef.current?.centerAt(node.x, node.y, 450);
+      graphRef.current?.zoom(1.5, 450);
+    }
+  };
 
-    for (const node of allNodes) {
-      const isIncoming = node.direction === "IN";
-      elements.push({
-        data: {
-          id: node.id,
-          label: `${short(node.address)}\n${displayAmount(node.total, node.asset)}`,
-          kind: "counterparty",
-          address: node.address,
-          direction: node.direction,
-          asset: node.asset,
-          total: node.total,
-          count: node.count,
-          txHash: node.transfers[0]?.tx_hash
-        },
-        position: (isIncoming ? incomingPositions : outgoingPositions).get(node.id),
-        classes: isIncoming ? "income" : "expense"
-      });
-      elements.push({
-        data: {
-          id: `edge-${node.id}`,
-          source: isIncoming ? node.id : "wallet",
-          target: isIncoming ? "wallet" : node.id,
-          label: `${isIncoming ? "RECEIVED" : "SENT"} · ${displayAmount(node.total, node.asset)}`,
-          kind: "relationship",
-          address: node.address,
-          direction: node.direction,
-          asset: node.asset,
-          total: node.total,
-          count: node.count,
-          txHash: node.transfers[0]?.tx_hash
-        },
-        classes: isIncoming ? "income-edge" : "expense-edge"
-      });
+  const selectLink = (link: RfgLink) => setSelected({
+    kind: "relationship",
+    title: link.direction === "IN" ? "Transferencia recibida" : "Transferencia enviada",
+    address: link.address,
+    direction: link.direction,
+    asset: link.asset,
+    total: link.total,
+    count: link.count,
+    txHash: link.txHash
+  });
+
+  const paintNode = (node: RfgNode, context: CanvasRenderingContext2D, scale: number) => {
+    if (node.x === undefined || node.y === undefined) return;
+    const isWallet = node.kind === "wallet";
+    const active = selected.address === node.address || hoveredNode === node.id;
+    const radius = isWallet ? 25 : 13 + Math.min(node.count, 5);
+    const fill = isWallet ? PALETTE.wallet : node.direction === "IN" ? PALETTE.incomeDark : PALETTE.expenseDark;
+    const stroke = isWallet ? "#c9c0ff" : node.color;
+
+    context.save();
+    context.shadowColor = node.color;
+    context.shadowBlur = active ? 24 : isWallet ? 18 : 9;
+    context.beginPath();
+    context.arc(node.x, node.y, radius, 0, Math.PI * 2);
+    context.fillStyle = fill;
+    context.fill();
+    context.shadowBlur = 0;
+    context.lineWidth = active ? 3.5 : isWallet ? 2.6 : 1.8;
+    context.strokeStyle = active ? "#ffffff" : stroke;
+    context.stroke();
+
+    if (isWallet) {
+      const gradient = context.createLinearGradient(node.x - radius, node.y - radius, node.x + radius, node.y + radius);
+      gradient.addColorStop(0, "#51d2ba");
+      gradient.addColorStop(1, PALETTE.wallet);
+      context.beginPath();
+      context.arc(node.x, node.y, radius - 3, 0, Math.PI * 2);
+      context.fillStyle = gradient;
+      context.fill();
     }
 
-    const cy = cytoscape({
-      container: graphRef.current,
-      elements,
-      layout: { name: "preset", fit: true, padding: 48 },
-      minZoom: 0.25,
-      maxZoom: 2.5,
-      wheelSensitivity: 0.18,
-      boxSelectionEnabled: true,
-      autounselectify: false,
-      style: [
-        {
-          selector: "node",
-          style: {
-            width: 78,
-            height: 78,
-            label: "data(label)",
-            color: "#f7f7fb",
-            "font-family": "DM Mono, monospace",
-            "font-size": 8,
-            "font-weight": 500,
-            "text-wrap": "wrap",
-            "text-max-width": "72px",
-            "text-valign": "center",
-            "text-halign": "center",
-            "background-color": "#303441",
-            "border-width": 2,
-            "border-color": "#777b88",
-            "overlay-opacity": 0
-          }
-        },
-        {
-          selector: "node.income",
-          style: { "background-color": "#153f39", "border-color": "#27c5a6" }
-        },
-        {
-          selector: "node.expense",
-          style: { "background-color": "#4a282e", "border-color": "#f06a62" }
-        },
-        {
-          selector: "node.wallet",
-          style: {
-            width: 108,
-            height: 108,
-            "font-size": 10,
-            "font-weight": 700,
-            "background-color": "#7565df",
-            "background-gradient-stop-colors": ["#59d3bd", "#7565df"],
-            "background-gradient-direction": "to-bottom-right",
-            "border-width": 4,
-            "border-color": "#c8bfff"
-          }
-        },
-        {
-          selector: "node:selected",
-          style: { "border-width": 6, "border-color": "#ffffff", "overlay-opacity": 0 }
-        },
-        {
-          selector: "edge",
-          style: {
-            width: 1.5,
-            "curve-style": "bezier",
-            "line-color": "#858995",
-            "target-arrow-color": "#858995",
-            "target-arrow-shape": "triangle",
-            "arrow-scale": 0.8,
-            label: "data(label)",
-            color: "#aeb1ba",
-            "font-family": "DM Mono, monospace",
-            "font-size": 6,
-            "text-background-color": "#171820",
-            "text-background-opacity": 0.86,
-            "text-background-padding": "3px",
-            "text-rotation": "autorotate",
-            "overlay-opacity": 0
-          }
-        },
-        {
-          selector: "edge.income-edge",
-          style: { "line-color": "#249f89", "target-arrow-color": "#31c9ac" }
-        },
-        {
-          selector: "edge.expense-edge",
-          style: { "line-color": "#b34d49", "target-arrow-color": "#f06a62" }
-        },
-        {
-          selector: "edge:selected",
-          style: { width: 4, color: "#ffffff", "text-background-opacity": 1 }
-        }
-      ]
-    });
+    context.fillStyle = PALETTE.paper;
+    context.font = `${isWallet ? 700 : 600} ${isWallet ? 9 : 6.5}px DM Mono, monospace`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(isWallet ? "V52" : node.direction ?? "?", node.x, node.y - (isWallet ? 2 : 0));
 
-    const selectElement = (event: EventObject) => {
-      const data = event.target.data();
-      setSelected({
-        kind: data.kind,
-        title: data.kind === "relationship"
-          ? (data.direction === "IN" ? "Transferencia recibida" : "Transferencia enviada")
-          : data.kind === "wallet" ? "Wallet investigada" : "Contraparte",
-        address: data.address,
-        direction: data.direction,
-        asset: data.asset,
-        total: data.total,
-        count: data.count,
-        txHash: data.txHash
-      });
-    };
-    cy.on("tap", "node, edge", selectElement);
-    cyRef.current = cy;
+    const fontSize = Math.max(5.5, 10 / scale);
+    context.font = `500 ${fontSize}px DM Mono, monospace`;
+    const address = isWallet ? short(node.address) : short(node.address);
+    const amount = isWallet ? `${node.count} transfers` : displayAmount(node.total, node.asset);
+    const widest = Math.max(context.measureText(address).width, context.measureText(amount).width) + 8;
+    const labelY = node.y + radius + 9;
+    context.fillStyle = "rgba(23, 24, 32, .9)";
+    context.beginPath();
+    context.roundRect(node.x - widest / 2, labelY - 6, widest, 17, 3);
+    context.fill();
+    context.fillStyle = "#f2f3f5";
+    context.fillText(address, node.x, labelY);
+    context.fillStyle = "#9da2ad";
+    context.fillText(amount, node.x, labelY + 7);
+    context.restore();
+  };
 
-    const resize = new ResizeObserver(() => {
-      cy.resize();
-      cy.fit(undefined, 44);
-    });
-    resize.observe(graphRef.current);
+  const paintNodePointer = (node: RfgNode, color: string, context: CanvasRenderingContext2D) => {
+    if (node.x === undefined || node.y === undefined) return;
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(node.x, node.y, node.kind === "wallet" ? 30 : 21, 0, Math.PI * 2);
+    context.fill();
+  };
 
-    return () => {
-      resize.disconnect();
-      cy.destroy();
-      cyRef.current = null;
-    };
-  }, [allNodes, incoming, outgoing, result, view]);
+  const paintLinkLabel = (link: RfgLink, context: CanvasRenderingContext2D, scale: number) => {
+    const source = nodeFromEndpoint(link.source);
+    const target = nodeFromEndpoint(link.target);
+    if (!source || !target || source.x === undefined || source.y === undefined || target.x === undefined || target.y === undefined) return;
+    if (scale < 0.72 && hoveredLink !== link.id) return;
+    const x = (source.x + target.x) / 2;
+    const y = (source.y + target.y) / 2;
+    const angle = Math.atan2(target.y - source.y, target.x - source.x);
+    const fontSize = Math.max(4.8, 8 / scale);
+    context.save();
+    context.translate(x, y);
+    context.rotate(angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle);
+    context.font = `600 ${fontSize}px DM Mono, monospace`;
+    const width = context.measureText(link.label).width + 7;
+    context.fillStyle = "rgba(27, 28, 34, .88)";
+    context.fillRect(-width / 2, -fontSize, width, fontSize + 3);
+    context.fillStyle = hoveredLink === link.id ? "#ffffff" : link.color;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(link.label, 0, -fontSize / 2 + 1);
+    context.restore();
+  };
 
-  const zoom = (factor: number) => {
-    const cy = cyRef.current;
-    if (!cy) return;
-    cy.zoom({ level: cy.zoom() * factor, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+  const resetLayout = () => {
+    for (const node of graphData.nodes) {
+      node.fx = undefined;
+      node.fy = undefined;
+    }
+    graphRef.current?.d3ReheatSimulation();
+    window.setTimeout(() => graphRef.current?.zoomToFit(550, 60), 500);
   };
 
   return (
-    <section className="flow-result neo-flow" aria-live="polite">
+    <section className="flow-result neo-flow force-flow" aria-live="polite">
       <div className="neo-toolbar">
         <div className="neo-tabs" role="tablist" aria-label="Vista de resultados">
           {(["graph", "table", "raw"] as const).map((mode) => (
             <button key={mode} type="button" role="tab" aria-selected={view === mode} onClick={() => setView(mode)}>
-              {mode === "graph" ? "Graph" : mode === "table" ? "Table" : "RAW"}
+              {mode === "graph" ? "Force Graph" : mode === "table" ? "Table" : "RAW"}
             </button>
           ))}
         </div>
-        <div className="neo-query"><span aria-hidden="true">›</span> MATCH (income)-[transfer]-&gt;(wallet)-[transfer]-&gt;(expense)</div>
+        <div className="neo-query"><span aria-hidden="true">›</span> FLOW (income)-[transfer]-&gt;(wallet)-[transfer]-&gt;(expense)</div>
         <div className="neo-source"><i /> LIVE · {result.source.provider.toUpperCase()}</div>
       </div>
 
       <div className="neo-content">
-        <div className="neo-main">
+        <div className="neo-main force-main">
           {view === "graph" ? (
             <>
               <div className="neo-column-hints" aria-hidden="true"><span>INGRESOS</span><span>WALLET</span><span>EGRESOS</span></div>
-              <div ref={graphRef} className="cytoscape-canvas" aria-label="Grafo interactivo de transferencias" />
-              <div className="graph-controls" aria-label="Controles del grafo">
-                <button type="button" onClick={() => zoom(1.25)} aria-label="Acercar">+</button>
-                <button type="button" onClick={() => zoom(0.8)} aria-label="Alejar">−</button>
-                <button type="button" onClick={() => cyRef.current?.fit(undefined, 48)} aria-label="Ajustar grafo">⌗</button>
-                <button type="button" onClick={() => cyRef.current?.center()} aria-label="Centrar grafo">◎</button>
+              <div ref={graphHostRef} className="force-canvas" aria-label="Grafo dinámico de transferencias">
+                <ForceGraph2D<RfgNode, RfgLink>
+                  ref={graphRef}
+                  width={dimensions.width}
+                  height={dimensions.height}
+                  graphData={graphData}
+                  backgroundColor="rgba(0,0,0,0)"
+                  dagMode="lr"
+                  dagLevelDistance={250}
+                  warmupTicks={80}
+                  cooldownTicks={160}
+                  d3AlphaDecay={0.025}
+                  d3VelocityDecay={0.35}
+                  nodeCanvasObject={paintNode}
+                  nodePointerAreaPaint={paintNodePointer}
+                  nodeLabel={(node) => `${node.label}\n${node.kind === "wallet" ? "Wallet investigada" : "Contraparte pública"}`}
+                  linkColor={(link) => hoveredLink === link.id ? "#ffffff" : `${link.color}88`}
+                  linkWidth={(link) => hoveredLink === link.id ? 3 : 1.25}
+                  linkLabel={(link) => link.label}
+                  linkDirectionalArrowLength={6}
+                  linkDirectionalArrowRelPos={0.94}
+                  linkDirectionalArrowColor={(link) => link.color}
+                  linkDirectionalParticles={2}
+                  linkDirectionalParticleSpeed={0.006}
+                  linkDirectionalParticleWidth={(link) => hoveredLink === link.id ? 4 : 2.2}
+                  linkDirectionalParticleColor={(link) => link.color}
+                  linkCanvasObjectMode={() => "after"}
+                  linkCanvasObject={paintLinkLabel}
+                  linkHoverPrecision={8}
+                  minZoom={0.25}
+                  maxZoom={5}
+                  onNodeClick={selectNode}
+                  onNodeHover={(node) => setHoveredNode(node?.id ? String(node.id) : null)}
+                  onNodeDragEnd={(node) => { node.fx = node.x; node.fy = node.y; }}
+                  onLinkClick={selectLink}
+                  onLinkHover={(link) => setHoveredLink(link?.id ? String(link.id) : null)}
+                  onEngineStop={() => graphRef.current?.zoomToFit(450, 58)}
+                />
               </div>
-              <div className="drag-hint">Arrastra nodos · rueda para zoom · arrastra el fondo para mover</div>
+              <div className="graph-controls" aria-label="Controles del grafo">
+                <button type="button" onClick={() => graphRef.current?.zoom((graphRef.current?.zoom() ?? 1) * 1.3, 250)} aria-label="Acercar">+</button>
+                <button type="button" onClick={() => graphRef.current?.zoom((graphRef.current?.zoom() ?? 1) * 0.77, 250)} aria-label="Alejar">−</button>
+                <button type="button" onClick={() => graphRef.current?.zoomToFit(450, 58)} aria-label="Ajustar grafo">⌗</button>
+                <button type="button" onClick={resetLayout} aria-label="Reiniciar física">↻</button>
+              </div>
+              <div className="drag-hint"><i /> Simulación activa · arrastra nodos · rueda para zoom · clic para investigar</div>
             </>
           ) : null}
           {view === "table" ? <TransferTable transfers={[...result.incoming, ...result.outgoing]} /> : null}
@@ -309,7 +384,6 @@ export function WalletFlowGraph({ result }: { result: WalletFlowResult }) {
 
         <aside className="neo-overview">
           <div className="overview-title"><div><span>RESULTS OVERVIEW</span><strong>{allNodes.length + 1} nodes · {allNodes.length} relationships</strong></div><span aria-hidden="true">↕</span></div>
-
           <div className="overview-group">
             <h3>Nodes</h3>
             <div className="tag-cloud">
@@ -319,16 +393,10 @@ export function WalletFlowGraph({ result }: { result: WalletFlowResult }) {
               {assetCounts.map(([asset, count]) => <span key={asset} className="tag-asset">{asset} ({count})</span>)}
             </div>
           </div>
-
           <div className="overview-group">
             <h3>Relationships</h3>
-            <div className="tag-cloud">
-              <span>RECEIVED ({incoming.length})</span>
-              <span>SENT ({outgoing.length})</span>
-              <span>CONNECTED ({allNodes.length})</span>
-            </div>
+            <div className="tag-cloud"><span>RECEIVED ({incoming.length})</span><span>SENT ({outgoing.length})</span><span>CONNECTED ({allNodes.length})</span></div>
           </div>
-
           <div className="overview-group selected-record">
             <h3>Selected evidence</h3>
             <span className={`direction-pill ${selected.direction === "OUT" ? "pill-out" : "pill-in"}`}>{selected.title}</span>
@@ -346,7 +414,7 @@ export function WalletFlowGraph({ result }: { result: WalletFlowResult }) {
 
       <div className="neo-footer">
         <div><span>FUENTE</span><strong>Alchemy Transfers API</strong></div>
-        <div><span>MÉTODO</span><strong>{result.source.method}</strong></div>
+        <div><span>MOTOR VISUAL</span><strong>react-force-graph · d3-force</strong></div>
         <div><span>ADQUIRIDO</span><strong>{new Date(result.acquired_at).toLocaleString()}</strong></div>
         <div><span>ESTADO</span><strong>{result.limits.truncated ? "MUESTRA LIMITADA" : "MUESTRA COMPLETA"}</strong></div>
       </div>

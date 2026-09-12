@@ -544,10 +544,20 @@ footer { display: flex; justify-content: space-between; width: min(1180px, calc(
 .table-out { color: #ff9a94; background: #4d2b2e; }
 .raw-result { color: #aee8dc; white-space: pre-wrap; font: 500 .64rem/1.6 "DM Mono", monospace; }
 
+.force-main { background-image: radial-gradient(rgba(118,123,136,.2) 1px, transparent 1px), radial-gradient(circle at 50% 50%, rgba(112,91,221,.08), transparent 45%); background-size: 22px 22px, 100% 100%; }
+.force-canvas { position: absolute; inset: 0; min-height: 680px; }
+.force-canvas canvas { display: block; outline: none; }
+.force-flow .neo-tabs button[aria-selected="true"] { color: #09221e; background: linear-gradient(135deg, #6ef0d5, #57d3ed); box-shadow: inset 0 -2px rgba(255,255,255,.42); }
+.force-flow .neo-query { color: #bdc2cc; }
+.force-flow .graph-controls button:last-child { color: #77e7d1; }
+.force-flow .drag-hint { display: flex; gap: 7px; align-items: center; color: #9296a0; }
+.force-flow .drag-hint i { width: 7px; height: 7px; border-radius: 50%; background: #33d1b2; box-shadow: 0 0 0 4px rgba(51,209,178,.12), 0 0 12px #33d1b2; animation: forcePulse 1.8s ease-in-out infinite; }
+@keyframes forcePulse { 50% { opacity: .45; transform: scale(.72); } }
+
 @media (max-width: 900px) {
   .neo-content { grid-template-columns: 1fr; }
   .neo-main { min-height: 620px; border-right: 0; border-bottom: 1px solid #353740; }
-  .cytoscape-canvas { min-height: 620px; }
+  .cytoscape-canvas, .force-canvas { min-height: 620px; }
   .neo-overview { display: grid; grid-template-columns: 1fr 1fr; }
   .overview-title, .selected-record { grid-column: 1 / -1; }
   .overview-group { border-right: 1px solid #3b3d45; }
@@ -557,6 +567,7 @@ footer { display: flex; justify-content: space-between; width: min(1180px, calc(
   .neo-query { grid-column: 1 / -1; grid-row: 2; padding: 4px; }
   .neo-content { min-height: 560px; }
   .neo-main, .cytoscape-canvas { min-height: 560px; }
+  .force-canvas { min-height: 560px; }
   .neo-overview { grid-template-columns: 1fr; }
   .overview-title, .selected-record { grid-column: auto; }
   .neo-footer { grid-template-columns: 1fr 1fr; }

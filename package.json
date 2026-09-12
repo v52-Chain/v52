@@ -13,9 +13,9 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
-    "cytoscape": "^3.34.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-force-graph-2d": "^1.29.1",
     "workbox-window": "^7.4.0"
   },
   "devDependencies": {
