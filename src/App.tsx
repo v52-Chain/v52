@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
 import { WalletFlowForm } from "./components/WalletFlowForm";
-import { WalletFlowGraph } from "./components/WalletFlowGraph";
 import type { RequestPhase, WalletFlowResult } from "./domain/apiTypes";
 
 type HealthState = "checking" | "online" | "degraded" | "offline";
+
+const WalletFlowGraph = lazy(() =>
+  import("./components/WalletFlowGraph").then((module) => ({ default: module.WalletFlowGraph }))
+);
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -165,7 +168,11 @@ export default function App() {
           </section>
         ) : null}
 
-        {result ? <WalletFlowGraph result={result} /> : phase !== "RUNNING" && !error ? (
+        {result ? (
+          <Suspense fallback={<section className="flow-loading"><div className="scanner" aria-hidden="true"><span /></div><div><h2>Preparando explorador…</h2></div></section>}>
+            <WalletFlowGraph result={result} />
+          </Suspense>
+        ) : phase !== "RUNNING" && !error ? (
           <section className="graph-empty">
             <div className="empty-orbit" aria-hidden="true"><i /><i /><span>V52</span></div>
             <div>
