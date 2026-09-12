@@ -8,6 +8,7 @@
 # Node / Vite
 node_modules/
 dist/
+dev-dist/
 coverage/
 .vite/
 

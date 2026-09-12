@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
-import { AuditForm } from "./components/AuditForm";
-import { EvidenceInspector } from "./components/EvidenceInspector";
-import { RunProgress } from "./components/RunProgress";
-import { VerdictPanel } from "./components/VerdictPanel";
-import type { AuditResult, ClaimAuditRequest, RequestPhase } from "./domain/apiTypes";
+import { WalletFlowForm } from "./components/WalletFlowForm";
+import { WalletFlowGraph } from "./components/WalletFlowGraph";
+import type { RequestPhase, WalletFlowResult } from "./domain/apiTypes";
 
 type HealthState = "checking" | "online" | "degraded" | "offline";
 
@@ -16,13 +14,13 @@ interface BeforeInstallPromptEvent extends Event {
 const errorMessage = (error: unknown) => {
   if (error instanceof Vector52ApiError) return error.message;
   if (error instanceof Error) return error.message;
-  return "The audit failed for an unknown reason.";
+  return "La investigación falló por una causa desconocida.";
 };
 
 export default function App() {
   const [phase, setPhase] = useState<RequestPhase>("IDLE");
   const [health, setHealth] = useState<HealthState>("checking");
-  const [result, setResult] = useState<AuditResult | null>(null);
+  const [result, setResult] = useState<WalletFlowResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installHint, setInstallHint] = useState(false);
@@ -31,11 +29,9 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    vector52Client
-      .health(controller.signal)
+    vector52Client.health(controller.signal)
       .then((response) => setHealth(response.status === "ok" ? "online" : "degraded"))
       .catch(() => setHealth("offline"));
-
     return () => controller.abort();
   }, []);
 
@@ -43,7 +39,6 @@ export default function App() {
 
   useEffect(() => {
     setIsInstalled(window.matchMedia("(display-mode: standalone)").matches);
-
     const handleInstallable = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
@@ -53,7 +48,6 @@ export default function App() {
       setInstallHint(false);
       setIsInstalled(true);
     };
-
     window.addEventListener("beforeinstallprompt", handleInstallable);
     window.addEventListener("appinstalled", handleInstalled);
     return () => {
@@ -67,25 +61,21 @@ export default function App() {
       setInstallHint(true);
       return;
     }
-
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      setInstallPrompt(null);
-    }
+    if (choice.outcome === "accepted") setInstallPrompt(null);
   };
 
-  const runAudit = async (request: ClaimAuditRequest) => {
+  const investigate = async (address: string, limit: number) => {
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
     setPhase("RUNNING");
     setResult(null);
     setError(null);
-
     try {
-      const nextResult = await vector52Client.auditClaim(request, controller.signal);
-      setResult(nextResult);
+      const next = await vector52Client.walletFlow(address, limit, controller.signal);
+      setResult(next);
       setPhase("SUCCESS");
     } catch (nextError) {
       if (nextError instanceof DOMException && nextError.name === "AbortError") return;
@@ -95,22 +85,17 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell buildathon-app">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Vector52 home">
+        <a className="brand" href="#top" aria-label="Vector52 inicio">
           <span className="brand-mark" aria-hidden="true">V</span>
-          <span>
-            <strong>VECTOR52</strong>
-            <small>PROOF LAB</small>
-          </span>
+          <span><strong>VECTOR52</strong><small>FORENSIC FLOW</small></span>
         </a>
-
-        <nav className="main-nav" aria-label="Primary navigation">
-          <a href="#audit">Audit</a>
-          <a href="#method">How it works</a>
-          <a href="#ecosystem">Ecosystem</a>
+        <nav className="main-nav" aria-label="Navegación principal">
+          <a href="#investigate">Investigar</a>
+          <a href="#method">Método</a>
+          <a href="#integrations">Integraciones</a>
         </nav>
-
         <div className="topbar-actions">
           <span className={`api-chip api-${health}`} aria-label={`API ${health}`} title={`API ${health}`}>
             <span className="health-dot" aria-hidden="true" />
@@ -118,7 +103,7 @@ export default function App() {
           </span>
           <button className="install-action" type="button" onClick={() => void requestInstall()} disabled={isInstalled}>
             <span className="install-icon" aria-hidden="true">↓</span>
-            {isInstalled ? "Installed" : "Install app"}
+            {isInstalled ? "Instalada" : "Instalar PWA"}
           </button>
         </div>
       </header>
@@ -126,182 +111,95 @@ export default function App() {
       {installHint ? (
         <div className="install-toast" role="status">
           <span aria-hidden="true">▣</span>
-          <p>
-            Run the production preview or wait for the browser to mark the PWA installable. You can also use
-            Chrome&apos;s menu → <strong>Install Vector52</strong>.
-          </p>
-          <button type="button" aria-label="Close install help" onClick={() => setInstallHint(false)}>×</button>
+          <p>Cuando el navegador habilite la instalación, usa su menú → <strong>Instalar Vector52</strong>.</p>
+          <button type="button" aria-label="Cerrar ayuda" onClick={() => setInstallHint(false)}>×</button>
         </div>
       ) : null}
 
       <main id="top">
-        <section className="hero">
-          <img
-            className="hero-illustration"
-            src="/images/vector52-hero.webp"
-            alt="An original illustration of an analyst organizing public onchain evidence around a crystal vault."
-          />
-          <div className="hero-copy">
-            <span className="event-kicker">BUILT FROM SCRATCH · ETHONLINE 2026</span>
-            <p className="eyebrow"><span aria-hidden="true">◆</span> Ethereum evidence, made challengeable</p>
-            <h1>Audit the story behind a transaction.</h1>
-            <p className="hero-lede">
-              Vector52 turns one Ethereum transaction and one claim into a traceable verdict—showing the proof,
-              the counterevidence and what remains unknown.
-            </p>
-            <div className="hero-actions">
-              <a className="primary-link" href="#audit">Start an audit <span aria-hidden="true">→</span></a>
-              <a className="secondary-link" href="#method">Explore the method</a>
+        <section className="flow-hero">
+          <div className="hero-badge"><span /> ETHEREUM BOLIVIA BUILDATHON 2026</div>
+          <div className="flow-hero-grid">
+            <div>
+              <p className="eyebrow">Wallet intelligence · evidencia primero</p>
+              <h1>Ve el movimiento.<br /><em>Cuestiona la historia.</em></h1>
+              <p className="hero-lede">
+                Vector52 transforma actividad onchain pública en un mapa investigable: ingresos a la izquierda,
+                wallet al centro y egresos a la derecha, con cada conexión vinculada a su evidencia.
+              </p>
+              <div className="hero-actions">
+                <a className="primary-link" href="#investigate">Investigar una wallet <span>→</span></a>
+                <a className="secondary-link" href="#method">Ver límites forenses</a>
+              </div>
             </div>
-            <div className="trust-row" aria-label="Product principles">
-              <span>No wallet required</span>
-              <span>Public data only</span>
-              <span>Explicit unknowns</span>
+            <div className="mini-flow" aria-hidden="true">
+              <div className="mini-label label-left">INGRESOS</div>
+              <div className="mini-label label-right">EGRESOS</div>
+              <i className="mini-edge e1" /><i className="mini-edge e2" /><i className="mini-edge e3" /><i className="mini-edge e4" />
+              <span className="mini-node n1">A</span><span className="mini-node n2">B</span>
+              <span className="mini-wallet">V52</span>
+              <span className="mini-node mini-out n3">C</span><span className="mini-node mini-out n4">D</span>
             </div>
           </div>
-          <aside className="proof-console" aria-label="Vector52 evidence path">
-            <p>ONE TRACEABLE PATH</p>
-            <ol>
-              <li><span>01</span> Transaction</li>
-              <li><span>02</span> Evidence</li>
-              <li><span>03</span> Verdict</li>
-            </ol>
-          </aside>
+          <div className="principle-strip">
+            <span><strong>01</strong> Datos reales</span>
+            <span><strong>02</strong> Fuente visible</span>
+            <span><strong>03</strong> Unknown válido</span>
+            <span><strong>04</strong> Sin custodia</span>
+          </div>
         </section>
 
-        <section className="workspace-grid" id="audit">
-          <AuditForm disabled={phase === "RUNNING"} onSubmit={runAudit} />
-          <RunProgress phase={phase} />
-        </section>
+        <WalletFlowForm disabled={phase === "RUNNING"} onSubmit={(address, limit) => void investigate(address, limit)} />
+
+        {phase === "RUNNING" ? (
+          <section className="flow-loading" role="status">
+            <div className="scanner" aria-hidden="true"><span /></div>
+            <div><p className="eyebrow">Adquisición en curso</p><h2>Separando ingresos y egresos…</h2><p>Consultando Alchemy desde el backend. No se sustituirán resultados con datos ficticios.</p></div>
+          </section>
+        ) : null}
 
         {error ? (
           <section className="error-banner" role="alert">
-            <div>
-              <p className="eyebrow">Audit stopped</p>
-              <h2>No evidence was substituted</h2>
-            </div>
+            <div><p className="eyebrow">Investigación detenida</p><h2>No se fabricaron nodos</h2></div>
             <p>{error}</p>
           </section>
         ) : null}
 
-        {result ? (
-          <div className="results-stack" aria-live="polite">
-            <VerdictPanel result={result} />
-            <EvidenceInspector supporting={result.evidence_for} opposing={result.evidence_against} />
-          </div>
-        ) : (
-          <section className="empty-state" aria-label="No audit result">
-            <div className="empty-art" aria-hidden="true">
-              <span className="empty-file">V52</span>
-              <span className="empty-spark">✦</span>
-            </div>
+        {result ? <WalletFlowGraph result={result} /> : phase !== "RUNNING" && !error ? (
+          <section className="graph-empty">
+            <div className="empty-orbit" aria-hidden="true"><i /><i /><span>V52</span></div>
             <div>
-              <p className="eyebrow">Evidence surface</p>
-              <h2>Your audit will appear here</h2>
-              <p>Results are never generated locally just to make the interface look complete.</p>
+              <p className="eyebrow">Lienzo forense</p>
+              <h2>Una dirección pública inicia el mapa.</h2>
+              <p>La vista mostrará transferencias directas verificables. No etiquetará identidades ni inferirá culpabilidad sin evidencia.</p>
             </div>
           </section>
-        )}
+        ) : null}
 
-        <section className="method-section" id="method">
-          <div className="method-heading">
-            <div>
-              <p className="eyebrow">How Vector52 works</p>
-              <h2>From public transaction to defensible conclusion.</h2>
-            </div>
-            <p>Every layer keeps its source and limits visible, so an explanation can be challenged and reproduced.</p>
+        <section className="buildathon-method" id="method">
+          <div className="method-intro">
+            <p className="eyebrow">Lo que lo hace distinto</p>
+            <h2>No es un grafo decorativo.<br />Es una superficie de evidencia.</h2>
+            <p>Arkham inspira la legibilidad del flujo. Vector52 añade una frontera clara entre observación, atribución e hipótesis.</p>
           </div>
-          <div className="method-layout">
-            <figure className="method-visual">
-              <img
-                src="/images/evidence-layers.webp"
-                alt="An original illustration of transaction, indexing, protocol and verdict evidence layers."
-                loading="lazy"
-              />
-              <figcaption>Raw data stays distinct from interpretation.</figcaption>
-            </figure>
-            <div className="method-grid">
-              <article className="method-card card-blue">
-                <span className="method-number">01</span>
-                <div className="method-icon">TX</div>
-                <h3>Define the claim</h3>
-                <p>Provide a transaction, a falsifiable statement and an optional subject address.</p>
-              </article>
-              <article className="method-card card-pink">
-                <span className="method-number">02</span>
-                <div className="method-icon">RPC</div>
-                <h3>Preserve evidence</h3>
-                <p>Acquire live Ethereum and indexed data while retaining source, block and hashes.</p>
-              </article>
-              <article className="method-card card-yellow">
-                <span className="method-number">03</span>
-                <div className="method-icon">DEX</div>
-                <h3>Resolve meaning</h3>
-                <p>Translate Uniswap events and separate protocol volume from subject contribution.</p>
-              </article>
-              <article className="method-card card-mint">
-                <span className="method-number">04</span>
-                <div className="method-icon">✓?</div>
-                <h3>Explain the verdict</h3>
-                <p>Return supporting evidence, counterevidence, gaps and an explicit verdict.</p>
-              </article>
-            </div>
+          <div className="method-points">
+            <article><span>OBSERVED</span><h3>Transferencia verificable</h3><p>Hash, bloque, activo, contraparte y fuente permanecen accesibles.</p></article>
+            <article><span>NOT PROVEN</span><h3>Conexión ≠ identidad</h3><p>Recibir o enviar fondos no prueba control común ni conducta ilícita.</p></article>
+            <article><span>EVENT HORIZON</span><h3>UNKNOWN es válido</h3><p>Cuando la evidencia termina, Vector52 lo declara en vez de completar la historia.</p></article>
           </div>
         </section>
 
-        <section className="ecosystem-section" id="ecosystem">
-          <div className="ecosystem-heading">
-            <div>
-              <p className="eyebrow">ETHOnline partner prize targets</p>
-              <h2>Built with the Ethereum ecosystem.</h2>
-            </div>
-            <p>
-              Each integration must carry real product weight. A logo never substitutes for working code,
-              provenance or a reproducible demo.
-            </p>
+        <section className="integration-section" id="integrations">
+          <div><p className="eyebrow">Arquitectura Buildathon</p><h2>Una ruta funcional, integraciones con propósito.</h2></div>
+          <div className="integration-grid">
+            <article><span className="status-live">MVP ACTIVO</span><h3>Alchemy</h3><p>RPC privado y Transfers API para adquirir la actividad histórica sin exponer credenciales al navegador.</p></article>
+            <article><span className="status-progress">EN INTEGRACIÓN</span><h3>The Graph + HSK</h3><p>Enriquecimiento de protocolos y evidencia indexada para extender el contexto multichain.</p></article>
+            <article><span className="status-progress">EN INTEGRACIÓN</span><h3>MCP + x402</h3><p>El agente del usuario podrá solicitar análisis y pagar tareas intensivas mediante una frontera explícita.</p></article>
           </div>
-
-          <div className="sponsor-grid">
-            <a className="sponsor-card sponsor-graph" href="https://ethglobal.com/events/ethonline2026/prizes/the-graph" target="_blank" rel="noreferrer">
-              <img src="/sponsors/the-graph.png" alt="The Graph" loading="lazy" />
-              <div>
-                <span className="sponsor-status">TARGET INTEGRATION</span>
-                <h3>The Graph</h3>
-                <p>Indexed, live blockchain evidence with visible provenance and degraded states.</p>
-              </div>
-              <span className="sponsor-arrow" aria-hidden="true">↗</span>
-            </a>
-            <a className="sponsor-card sponsor-uniswap" href="https://ethglobal.com/events/ethonline2026/prizes/uniswap-foundation" target="_blank" rel="noreferrer">
-              <img src="/sponsors/uniswap.png" alt="Uniswap" loading="lazy" />
-              <div>
-                <span className="sponsor-status">TARGET INTEGRATION</span>
-                <h3>Uniswap</h3>
-                <p>Protocol semantics that turn raw swap events into an attributable action.</p>
-              </div>
-              <span className="sponsor-arrow" aria-hidden="true">↗</span>
-            </a>
-            <a className="sponsor-card sponsor-bazantic" href="https://bazantic.com/" target="_blank" rel="noreferrer">
-              <img src="/sponsors/bazantic.png" alt="Bazantic" loading="lazy" />
-              <div>
-                <span className="sponsor-status">CONDITIONAL · PENDING GO</span>
-                <h3>Bazantic</h3>
-                <p>Agent-ready distribution only after the core audit path passes every P0 gate.</p>
-              </div>
-              <span className="sponsor-arrow" aria-hidden="true">↗</span>
-            </a>
-          </div>
-
-          <p className="independence-note">
-            Vector52 is an independent ETHOnline 2026 hackathon project. It is not produced, operated or endorsed
-            by the Ethereum Foundation, ethereum.org, ETHGlobal or the listed sponsor organizations.
-          </p>
         </section>
       </main>
 
-      <footer>
-        <span>Vector52 · An independent ETHOnline 2026 project</span>
-        <span>Open evidence · explicit limits</span>
-      </footer>
+      <footer><span>Vector52 · Ethereum Bolivia Buildathon 2026</span><span>Observe → Preserve → Explain → Verify</span></footer>
     </div>
   );
 }

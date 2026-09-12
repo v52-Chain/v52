@@ -110,4 +110,39 @@ export interface HealthResponse {
   version: string;
 }
 
+export interface FlowTransfer {
+  transfer_id: string;
+  direction: "IN" | "OUT";
+  counterparty: string;
+  tx_hash: string;
+  block_number?: number | null;
+  timestamp?: string | null;
+  asset: string;
+  category: string;
+  value?: string | null;
+  contract_address?: string | null;
+  token_id?: string | null;
+}
+
+export interface WalletFlowResult {
+  chain_id: 1;
+  network: "ethereum-mainnet";
+  address: string;
+  acquired_at: string;
+  incoming: FlowTransfer[];
+  outgoing: FlowTransfer[];
+  source: {
+    provider: "alchemy";
+    method: "alchemy_getAssetTransfers";
+    authority: "L1_INDEXED";
+  };
+  limits: {
+    requested_per_direction: number;
+    returned_incoming: number;
+    returned_outgoing: number;
+    truncated: boolean;
+  };
+  warnings: string[];
+}
+
 export type RequestPhase = "IDLE" | "RUNNING" | "SUCCESS" | "ERROR";

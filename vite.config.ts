@@ -21,9 +21,9 @@ export default defineConfig({
         enabled: true
       },
       manifest: {
-        name: "Vector52 Control Room",
+        name: "Vector52 Forensic Flow",
         short_name: "Vector52",
-        description: "Evidence-first onchain claim verification.",
+        description: "Wallet flow investigation with verifiable onchain evidence.",
         id: "/",
         theme_color: "#f7f7fb",
         background_color: "#f7f7fb",

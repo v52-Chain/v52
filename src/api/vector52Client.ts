@@ -1,4 +1,4 @@
-import type { AuditResult, ClaimAuditRequest, HealthResponse } from "../domain/apiTypes";
+import type { AuditResult, ClaimAuditRequest, HealthResponse, WalletFlowResult } from "../domain/apiTypes";
 
 export class Vector52ApiError extends Error {
   readonly status: number;
@@ -32,6 +32,14 @@ export class Vector52Client {
       body: JSON.stringify(payload),
       signal
     });
+  }
+
+  async walletFlow(address: string, limit = 25, signal?: AbortSignal): Promise<WalletFlowResult> {
+    const encodedAddress = encodeURIComponent(address.trim());
+    return this.request<WalletFlowResult>(
+      `/v1/wallets/1/${encodedAddress}/flow?limit=${limit}`,
+      { signal }
+    );
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
