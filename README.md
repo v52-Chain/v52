@@ -156,3 +156,5 @@ pnpm build
 - No persistir evidence/package sensibles en el service worker.
 - No marcar MCP, HSK o x402 como `READY` basándose en mocks.
 - Los links de explorer y receipts deben venir de respuestas verificadas del backend.
+
+copy Vector52
