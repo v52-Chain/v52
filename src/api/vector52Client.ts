@@ -1,4 +1,4 @@
-import type { AgentCapabilities, AuditResult, ClaimAuditRequest, HealthResponse, McpStatusResponse, McpToolsResponse, WalletChallenge, WalletIdentity, WalletSession, WalletVerifyInput, WebCapabilities } from "../domain/apiTypes";
+import type { AgentCapabilities, AnchorCaseResponse, AnchorLookupResponse, AuditResult, CaseEvidenceRecord, CaseRecord, ClaimAuditRequest, HealthResponse, McpStatusResponse, McpToolsResponse, VerifyResponse, WalletChallenge, WalletIdentity, WalletSession, WalletVerifyInput, WebCapabilities } from "../domain/apiTypes";
 
 export class Vector52ApiError extends Error {
   readonly status: number;
@@ -76,6 +76,41 @@ export class Vector52Client {
 
   async mcpTools(signal?: AbortSignal): Promise<McpToolsResponse> {
     return this.request<McpToolsResponse>("/v1/integrations/mcp/tools", { signal });
+  }
+
+  async getCase(caseId: string, signal?: AbortSignal): Promise<CaseRecord> {
+    return this.request<CaseRecord>(`/v1/cases/${encodeURIComponent(caseId)}`, { signal });
+  }
+
+  async getCaseEvidence(caseId: string, signal?: AbortSignal): Promise<CaseEvidenceRecord[]> {
+    return this.request<CaseEvidenceRecord[]>(`/v1/cases/${encodeURIComponent(caseId)}/evidence`, { signal });
+  }
+
+  casePackageUrl(caseId: string): string {
+    return `${this.baseUrl}/v1/cases/${encodeURIComponent(caseId)}/package`;
+  }
+
+  async anchorCase(caseId: string, supersedes?: string, signal?: AbortSignal): Promise<AnchorCaseResponse> {
+    return this.request<AnchorCaseResponse>(`/v1/cases/${encodeURIComponent(caseId)}/anchor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(supersedes ? { supersedes } : {}),
+      signal
+    });
+  }
+
+  async getAnchor(manifestRoot: string, signal?: AbortSignal): Promise<AnchorLookupResponse> {
+    return this.request<AnchorLookupResponse>(`/v1/anchors/${encodeURIComponent(manifestRoot)}`, { signal });
+  }
+
+  async verifyPackage(file: File, signal?: AbortSignal): Promise<VerifyResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.request<VerifyResponse>("/v1/verify", {
+      method: "POST",
+      body: formData,
+      signal
+    });
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

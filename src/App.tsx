@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { Bot, Download, FileCheck2, Search, ShieldCheck } from "lucide-react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
 import { AuditForm } from "./components/AuditForm";
+import { CaseTools } from "./components/CaseTools";
 import { EvidenceInspector } from "./components/EvidenceInspector";
 import { RunProgress } from "./components/RunProgress";
 import { VerdictPanel } from "./components/VerdictPanel";
@@ -16,7 +17,7 @@ import type { Locale } from "./domain/locale";
 import { reownConfigured } from "./web3/appkit";
 
 type HealthState = "checking" | "online" | "degraded" | "offline";
-type InvestigationMode = "wallet" | "claim";
+type InvestigationMode = "wallet" | "claim" | "cases";
 type AppView = "intro" | "workspace" | "project";
 
 const viewFromPath = (): AppView => {
@@ -354,6 +355,9 @@ export default function App() {
             <button type="button" role="tab" aria-selected={mode === "claim"} onClick={() => setMode("claim")}>
               {locale === "es" ? "Auditar claim" : "Audit claim"}
             </button>
+            <button type="button" role="tab" aria-selected={mode === "cases"} onClick={() => setMode("cases")}>
+              {locale === "es" ? "Casos y verificación" : "Cases & verification"}
+            </button>
           </div>
         </section>
 
@@ -382,11 +386,13 @@ export default function App() {
               onSubmit={() => openConnect("web")}
             />
           )
-        ) : (
+        ) : mode === "claim" ? (
           <section className="workspace-grid claim-workspace">
             <AuditForm locale={locale} disabled={auditPhase === "RUNNING"} onSubmit={(request) => void auditClaim(request)} />
             <RunProgress phase={auditPhase} locale={locale} />
           </section>
+        ) : (
+          <CaseTools locale={locale} initialCaseId={auditResult?.case_id} />
         )}
 
         {mode === "wallet" && phase === "RUNNING" ? (

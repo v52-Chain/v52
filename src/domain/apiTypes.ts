@@ -2,8 +2,10 @@ export type CaseStatus =
   | "PENDING"
   | "RUNNING"
   | "COMPLETE"
+  | "PARTIAL"
   | "DEGRADED"
-  | "FAILED";
+  | "FAILED"
+  | "UNKNOWN";
 
 export type EvidenceStatus =
   | "PENDING"
@@ -284,3 +286,84 @@ export interface WalletFlowResult {
 }
 
 export type RequestPhase = "IDLE" | "RUNNING" | "SUCCESS" | "ERROR";
+
+export interface CaseRecord {
+  case_id: string;
+  chain_id: number;
+  transaction_hash: string;
+  subject: string;
+  claim: string;
+  status: CaseStatus;
+  verdict: Verdict | null;
+  evidence_status: EvidenceStatus;
+  evidence_record_ids: string[];
+  created_at: string;
+  updated_at: string;
+  warnings: string[];
+  timing_ms: Record<string, number>;
+}
+
+export interface CaseEvidenceRecord {
+  evidence_id: string;
+  authority_level: AuthorityLevel;
+  chain_id: number;
+  source: string;
+  source_type?: string | null;
+  provider?: string | null;
+  network?: string | null;
+  endpoint_id?: string | null;
+  method: string;
+  request_fingerprint: string;
+  retrieved_at: string;
+  raw_path: string;
+  raw_sha256: string;
+  adapter_version: string;
+  status: EvidenceStatus;
+  warnings: string[];
+  block_number?: number | null;
+  block_hash?: string | null;
+  indexing_errors?: boolean | null;
+  graph_deployment?: string | null;
+}
+
+export interface AnchorCaseResponse {
+  case_id: string;
+  manifest_root: string;
+  methodology_hash: string;
+  schema_version: string;
+  issuer: string;
+  supersedes: string | null;
+  chain_id: number;
+  tx_hash: string;
+  block_number: number;
+  gas_used: number;
+  explorer_tx_url: string;
+  explorer_address_url: string;
+  already_anchored: boolean;
+}
+
+export interface AnchorLookupResponse {
+  manifest_root: string;
+  methodology_hash: string;
+  schema_version: string;
+  case_id: string;
+  issuer: string;
+  block_number: number;
+  timestamp: number;
+  supersedes: string | null;
+  chain_id: number;
+  tx_hash: string | null;
+  explorer_tx_url: string | null;
+  explorer_address_url: string;
+}
+
+export interface VerifyError {
+  file: string;
+  reason: string;
+}
+
+export interface VerifyResponse {
+  status: "PASS" | "FAIL";
+  checked_files: number;
+  errors: VerifyError[];
+}
