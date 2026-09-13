@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { ArrowRight, Bot, ChevronDown, Download, FileCheck2, Globe2, Network, PlugZap, Search, ShieldCheck, Waypoints, Zap } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Bot, Download, FileCheck2, Search, ShieldCheck } from "lucide-react";
 import { vector52Client, Vector52ApiError } from "./api/vector52Client";
 import { AuditForm } from "./components/AuditForm";
 import { EvidenceInspector } from "./components/EvidenceInspector";
@@ -7,13 +7,23 @@ import { RunProgress } from "./components/RunProgress";
 import { VerdictPanel } from "./components/VerdictPanel";
 import { WalletFlowForm } from "./components/WalletFlowForm";
 import { ConnectHub } from "./components/ConnectHub";
-import { PixelCard } from "./components/reactbits/PixelCard";
-import { Threads } from "./components/reactbits/Threads";
-import type { AgentCapabilities, AuditResult, ClaimAuditRequest, RequestPhase, WalletFlowFilters, WalletFlowResult, WalletSession } from "./domain/apiTypes";
+import { IntroExperience } from "./components/IntroExperience";
+import { ProjectInfoPage } from "./components/ProjectInfoPage";
+import { PaidWalletFlow } from "./components/PaidWalletFlow";
+import { WalletMenuButton } from "./components/WalletAccess";
+import type { AgentCapabilities, AuditResult, ClaimAuditRequest, McpStatusResponse, McpToolDescriptor, RequestPhase, WalletFlowResult, WalletSession, WebCapabilities } from "./domain/apiTypes";
 import type { Locale } from "./domain/locale";
+import { reownConfigured } from "./web3/appkit";
 
 type HealthState = "checking" | "online" | "degraded" | "offline";
 type InvestigationMode = "wallet" | "claim";
+type AppView = "intro" | "workspace" | "project";
+
+const viewFromPath = (): AppView => {
+  if (window.location.pathname.startsWith("/app")) return "workspace";
+  if (window.location.pathname.startsWith("/project")) return "project";
+  return "intro";
+};
 
 const readWalletSession = (): WalletSession | null => {
   try {
@@ -89,6 +99,7 @@ const errorMessage = (error: unknown, locale: Locale) => {
 };
 
 export default function App() {
+  const [view, setView] = useState<AppView>(viewFromPath);
   const [locale, setLocale] = useState<Locale>(() => window.localStorage.getItem("v52-locale") === "en" ? "en" : "es");
   const [phase, setPhase] = useState<RequestPhase>("IDLE");
   const [auditPhase, setAuditPhase] = useState<RequestPhase>("IDLE");
@@ -101,14 +112,32 @@ export default function App() {
   const [walletSession, setWalletSessionState] = useState<WalletSession | null>(readWalletSession);
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectMode, setConnectMode] = useState<"web" | "agent">("web");
-  const [credits, setCredits] = useState<number | null>(null);
+  const [webCapabilities, setWebCapabilities] = useState<WebCapabilities | null>(null);
   const [agentCapabilities, setAgentCapabilities] = useState<AgentCapabilities | null>(null);
+  const [mcpStatus, setMcpStatus] = useState<McpStatusResponse | null>(null);
+  const [mcpTools, setMcpTools] = useState<McpToolDescriptor[]>([]);
+  const [mcpLoading, setMcpLoading] = useState(true);
+  const [mcpError, setMcpError] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installHint, setInstallHint] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const activeRequest = useRef<AbortController | null>(null);
   const activeAuditRequest = useRef<AbortController | null>(null);
   const copy = COPY[locale];
+
+  const navigate = useCallback((nextView: AppView) => {
+    const path = nextView === "workspace" ? "/app" : nextView === "project" ? "/project" : "/";
+    if (window.location.pathname !== path) window.history.pushState({ view: nextView }, "", path);
+    setView(nextView);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  const openWorkspace = useCallback(() => navigate("workspace"), [navigate]);
+
+  useEffect(() => {
+    const handlePopState = () => setView(viewFromPath());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -123,17 +152,52 @@ export default function App() {
     return () => controller.abort();
   }, []);
 
+  const refreshMcp = useCallback(async (signal?: AbortSignal) => {
+    setMcpLoading(true);
+    setMcpError(null);
+    try {
+      const [webCapabilitiesResult, agentCapabilitiesResult, status, tools] = await Promise.allSettled([
+        vector52Client.webCapabilities(signal),
+        vector52Client.agentCapabilities(signal),
+        vector52Client.mcpStatus(signal),
+        vector52Client.mcpTools(signal)
+      ]);
+      if (signal?.aborted) return;
+      setWebCapabilities(webCapabilitiesResult.status === "fulfilled" ? webCapabilitiesResult.value : null);
+      setAgentCapabilities(agentCapabilitiesResult.status === "fulfilled" ? agentCapabilitiesResult.value : null);
+      setMcpStatus(status.status === "fulfilled" ? status.value : null);
+      setMcpTools(tools.status === "fulfilled" && tools.value.state === "READY" ? tools.value.tools : []);
+      const failure = [agentCapabilitiesResult, status, tools].find((result) => result.status === "rejected");
+      if (failure?.status === "rejected") setMcpError(errorMessage(failure.reason, locale));
+    } catch (nextError) {
+      if (nextError instanceof DOMException && nextError.name === "AbortError") return;
+      setMcpStatus(null);
+      setMcpTools([]);
+      setWebCapabilities(null);
+      setAgentCapabilities(null);
+      setMcpError(errorMessage(nextError, locale));
+    } finally {
+      if (!signal?.aborted) setMcpLoading(false);
+    }
+  }, [locale]);
+
   useEffect(() => {
     const controller = new AbortController();
-    vector52Client.agentCapabilities(controller.signal).then(setAgentCapabilities).catch(() => setAgentCapabilities(null));
+    void refreshMcp(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [refreshMcp]);
+
+  useEffect(() => {
+    if (!connectOpen || connectMode !== "agent") return;
+    void refreshMcp();
+    const timer = window.setInterval(() => void refreshMcp(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [connectMode, connectOpen, refreshMcp]);
 
   const setWalletSession = (session: WalletSession | null) => {
     setWalletSessionState(session);
     if (session) window.sessionStorage.setItem("v52-wallet-session", JSON.stringify(session));
     else window.sessionStorage.removeItem("v52-wallet-session");
-    if (!session) setCredits(null);
   };
 
   const openConnect = (nextMode: "web" | "agent" = "web") => {
@@ -142,7 +206,6 @@ export default function App() {
   };
 
   useEffect(() => () => {
-    activeRequest.current?.abort();
     activeAuditRequest.current?.abort();
   }, []);
 
@@ -175,29 +238,15 @@ export default function App() {
     if (choice.outcome === "accepted") setInstallPrompt(null);
   };
 
-  const investigate = async (address: string, limit: number, filters: WalletFlowFilters) => {
-    if (!walletSession) {
-      setError(locale === "es" ? "Conecta y verifica tu wallet para abrir una investigación web." : "Connect and verify your wallet to open a web investigation.");
-      return;
-    }
-    activeRequest.current?.abort();
-    const controller = new AbortController();
-    activeRequest.current = controller;
+  const startPaidInvestigation = () => {
     setPhase("RUNNING");
     setResult(null);
     setError(null);
-    try {
-      const next = await vector52Client.webWalletFlow(address, limit, filters, walletSession.access_token, controller.signal);
-      setResult(next.result);
-      if (next.credits_remaining !== undefined && next.credits_remaining !== null) setCredits(next.credits_remaining);
-      setPhase("SUCCESS");
-    } catch (nextError) {
-      if (nextError instanceof DOMException && nextError.name === "AbortError") return;
-      if (nextError instanceof Vector52ApiError && nextError.status === 401) setWalletSession(null);
-      if (nextError instanceof Vector52ApiError && nextError.status === 402) openConnect("web");
-      setError(errorMessage(nextError, locale));
-      setPhase("ERROR");
-    }
+  };
+
+  const failPaidInvestigation = (nextError: unknown) => {
+    setError(errorMessage(nextError, locale));
+    setPhase("ERROR");
   };
 
   const auditClaim = async (request: ClaimAuditRequest) => {
@@ -218,17 +267,25 @@ export default function App() {
     }
   };
 
+  if (view === "intro") {
+    return <IntroExperience locale={locale} onLocale={setLocale} onEnter={openWorkspace} />;
+  }
+
+  if (view === "project") {
+    return <ProjectInfoPage locale={locale} onLocale={setLocale} onLaunch={() => navigate("workspace")} onIntro={() => navigate("intro")} />;
+  }
+
   return (
     <div className="app-shell buildathon-app">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label={copy.home}>
+        <button className="brand brand-button" type="button" onClick={() => navigate("intro")} aria-label={copy.home}>
           <span className="brand-mark" aria-hidden="true">V</span>
           <span><strong>VECTOR52</strong><small>FORENSIC FLOW</small></span>
-        </a>
+        </button>
         <nav className="main-nav" aria-label={copy.nav}>
-          <a href="#investigate"><Search size={15} />{copy.investigate}</a>
-          <a href="#method"><Waypoints size={15} />{copy.method}</a>
-          <a href="#integrations"><PlugZap size={15} />{copy.integrations}</a>
+          <button type="button" className="is-active"><Search size={15} />{copy.investigate}</button>
+          <button type="button" onClick={() => navigate("project")}><FileCheck2 size={15} />{locale === "es" ? "Proyecto" : "Project"}</button>
+          <button type="button" onClick={() => openConnect("agent")}><Bot size={15} />{locale === "es" ? "Agente" : "Agent"}</button>
         </nav>
         <div className="topbar-actions">
           <span className={`api-chip api-${health}`} aria-label={`API ${health}`} title={`API ${health}`}>
@@ -239,11 +296,7 @@ export default function App() {
             <button type="button" aria-pressed={locale === "es"} onClick={() => setLocale("es")}>ES</button>
             <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>EN</button>
           </div>
-          <button className="connect-action" type="button" onClick={() => openConnect("web")}>
-            <span className={walletSession ? "connect-status is-connected" : "connect-status"} />
-            <span>{walletSession ? `${credits ?? "—"} ${locale === "es" ? "consultas" : "requests"}` : "Connect"}</span>
-            <ChevronDown size={14} />
-          </button>
+          <WalletMenuButton locale={locale} onOpen={() => openConnect("web")} />
           <button className="install-action" type="button" onClick={() => void requestInstall()} disabled={isInstalled}>
             <Download className="install-icon" size={16} aria-hidden="true" />
             {isInstalled ? copy.installed : copy.install}
@@ -256,10 +309,15 @@ export default function App() {
         open={connectOpen}
         initialMode={connectMode}
         session={walletSession}
+        webCapabilities={webCapabilities}
         agentCapabilities={agentCapabilities}
+        mcpStatus={mcpStatus}
+        mcpTools={mcpTools}
+        mcpLoading={mcpLoading}
+        mcpError={mcpError}
+        onRefreshMcp={() => void refreshMcp()}
         onClose={() => setConnectOpen(false)}
         onSession={setWalletSession}
-        onCredits={setCredits}
       />
 
       {installHint ? (
@@ -271,51 +329,17 @@ export default function App() {
       ) : null}
 
       <main id="top">
-        <section className="flow-hero desktop-hero">
-          <Threads color={[.34, .48, .96]} amplitude={.46} distance={.18} enableMouseInteraction className="hero-threads" />
-          <div className="desktop-hero-copy">
-            <div className="hero-status"><span className="live-dot" />{copy.caseFile}</div>
-            <p className="eyebrow">{copy.eyebrow}</p>
-            <h1>{copy.titleA}<br /><em>{copy.titleB}</em></h1>
-            <p className="hero-lede">{copy.lede}</p>
-            <div className="hero-actions">
-              <a className="primary-link" href="#investigate"><Search size={18} />{copy.investigateWallet}<ArrowRight size={17} /></a>
-              <a className="secondary-link" href="#method"><FileCheck2 size={17} />{copy.forensicLimits}</a>
-            </div>
-            <div className="hero-trust-row">
-              <span><ShieldCheck size={16} />{copy.principles[1]}</span>
-              <span><Network size={16} />{copy.principles[2]}</span>
-            </div>
+        <section className="workspace-welcome">
+          <div>
+            <p className="eyebrow"><ShieldCheck size={15} /> VECTOR52 CASE WORKSPACE</p>
+            <h1>{locale === "es" ? "¿Qué necesitas investigar hoy?" : "What do you need to investigate today?"}</h1>
+            <p>{locale === "es" ? "Pega una wallet y acota las fechas. Cada resultado conservará su fuente y sus límites." : "Paste a wallet and narrow the dates. Every result will preserve its source and its limits."}</p>
           </div>
-          <div className="hero-visual" aria-hidden="true">
-            <div className="desktop-window-bar"><i /><i /><i /><span>VECTOR52 / CASE WORKSPACE</span></div>
-            <img src="/images/vector52-cover.jpeg" alt="" />
-            <div className="hero-evidence-card"><small>{copy.signal}</small><strong>{copy.traceTwoText}</strong><span>OBSERVE · PRESERVE · VERIFY</span></div>
-          </div>
-          <div className="principle-strip">
-            {copy.principles.map((principle, index) => <span key={principle}><strong>0{index + 1}</strong> {principle}</span>)}
-          </div>
-        </section>
-
-        <section className="access-channels" aria-label={locale === "es" ? "Canales de acceso" : "Access channels"}>
-          <div className="access-intro">
-            <p className="eyebrow">VECTOR52 ACCESS LAYER</p>
-            <h2>{locale === "es" ? "Una inteligencia. Dos formas de operar." : "One intelligence core. Two ways to operate."}</h2>
-            <p>{locale === "es" ? "La web autentica personas mediante firma; el canal MCP autoriza trabajo autónomo mediante pago x402." : "The web authenticates people with a signature; the MCP channel authorizes autonomous work through x402 payment."}</p>
-          </div>
-          <article className="access-card access-web">
-            <div className="access-card-head"><span><Globe2 size={17} />WEB USER</span><b>{walletSession ? "READY" : "SIGN-IN"}</b></div>
-            <h3>{locale === "es" ? "Investigación interactiva" : "Interactive investigation"}</h3>
-            <p>{locale === "es" ? "Reown conecta la wallet. Una firma de mensaje crea una sesión temporal; nunca se solicita una private key." : "Reown connects the wallet. A message signature creates a temporary session; no private key is ever requested."}</p>
-            <button className="access-open-action" type="button" onClick={() => openConnect("web")}><Globe2 size={16} />{walletSession ? (locale === "es" ? "Administrar acceso" : "Manage access") : (locale === "es" ? "Conectar wallet" : "Connect wallet")}<ArrowRight size={15} /></button>
-          </article>
-          <article className="access-card access-agent">
-            <div className="access-card-head"><span><Bot size={17} />MCP AGENT</span><b className={agentCapabilities?.ready ? "is-ready" : "is-pending"}>{agentCapabilities?.ready ? "READY" : "CONFIG"}</b></div>
-            <h3>{locale === "es" ? "Investigación autónoma pagada" : "Paid autonomous investigation"}</h3>
-            <p>{locale === "es" ? "Claude, Codex u otro cliente MCP solicita el trabajo; el cliente del agente firma y paga USDC en Fuji antes de ejecutarlo." : "Claude, Codex or another MCP client requests work; the agent client signs and pays USDC on Fuji before execution."}</p>
-            <div className="agent-route"><Zap size={15} /><code>POST /v1/agent/investigations/wallet-flow</code><span>{agentCapabilities?.amount_atomic ?? "—"} atomic</span></div>
-            <button className="access-open-action agent" type="button" onClick={() => openConnect("agent")}><Bot size={16} />{locale === "es" ? "Configurar agente" : "Configure agent"}<ArrowRight size={15} /></button>
-          </article>
+          <button type="button" className="agent-prompt-card" onClick={() => openConnect("agent")}>
+            <Bot size={21} />
+            <span><small>{locale === "es" ? "PREFIERO CONTAR LO QUE PASÓ" : "I'D RATHER DESCRIBE WHAT HAPPENED"}</small><strong>{locale === "es" ? "Investigar con mi agente" : "Investigate with my agent"}</strong></span>
+            <span className="agent-prompt-arrow">→</span>
+          </button>
         </section>
 
         <section className="investigation-switch" id="investigate" aria-label={locale === "es" ? "Tipo de investigación" : "Investigation type"}>
@@ -334,12 +358,30 @@ export default function App() {
         </section>
 
         {mode === "wallet" ? (
-          <WalletFlowForm
-            locale={locale}
-            busy={phase === "RUNNING"}
-            accessLocked={!walletSession}
-            onSubmit={(address, limit, filters) => void investigate(address, limit, filters)}
-          />
+          reownConfigured ? (
+            <PaidWalletFlow
+              locale={locale}
+              busy={phase === "RUNNING"}
+              session={walletSession}
+              capabilities={webCapabilities}
+              onSession={setWalletSession}
+              onStart={startPaidInvestigation}
+              onSuccess={(response) => {
+                setResult(response.result);
+                setPhase("SUCCESS");
+              }}
+              onError={failPaidInvestigation}
+            />
+          ) : (
+            <WalletFlowForm
+              locale={locale}
+              busy={false}
+              accessLocked
+              submitLabel={locale === "es" ? "Configurar Reown" : "Configure Reown"}
+              paymentReady
+              onSubmit={() => openConnect("web")}
+            />
+          )
         ) : (
           <section className="workspace-grid claim-workspace">
             <AuditForm locale={locale} disabled={auditPhase === "RUNNING"} onSubmit={(request) => void auditClaim(request)} />
@@ -390,30 +432,9 @@ export default function App() {
           </div>
         ) : null}
 
-        <section className="buildathon-method" id="method">
-          <div className="method-intro">
-            <p className="eyebrow">{copy.distinct}</p>
-            <h2>{copy.methodTitleA}<br />{copy.methodTitleB}</h2>
-            <p>{copy.methodBody}</p>
-          </div>
-          <div className="method-points">
-            <PixelCard variant="cyan"><article><span>OBSERVED</span><h3>{copy.observedTitle}</h3><p>{copy.observedBody}</p></article></PixelCard>
-            <PixelCard variant="violet"><article><span>NOT PROVEN</span><h3>{copy.notProvenTitle}</h3><p>{copy.notProvenBody}</p></article></PixelCard>
-            <PixelCard variant="amber"><article><span>EVENT HORIZON</span><h3>{copy.horizonTitle}</h3><p>{copy.horizonBody}</p></article></PixelCard>
-          </div>
-        </section>
-
-        <section className="integration-section" id="integrations">
-          <div><p className="eyebrow">{copy.architecture}</p><h2>{copy.architectureTitle}</h2></div>
-          <div className="integration-grid">
-            <PixelCard variant="cyan"><article><span className="status-live">{copy.live}</span><h3>Alchemy</h3><p>{copy.alchemy}</p></article></PixelCard>
-            <PixelCard variant="violet"><article><span className="status-progress">{copy.progress}</span><h3>The Graph + HSK</h3><p>{copy.graphHsk}</p></article></PixelCard>
-            <PixelCard variant="amber"><article><span className="status-progress">{copy.progress}</span><h3>MCP + x402</h3><p>{copy.mcp}</p></article></PixelCard>
-          </div>
-        </section>
       </main>
 
-      <footer><span>Vector52 · Ethereum Bolivia Buildathon 2026</span><span>{copy.footer}</span></footer>
+      <footer className="workspace-statusbar"><span><i className={`status-dot api-${health}`} />Vector52 Core · {health}</span><button type="button" onClick={() => navigate("project")}>{locale === "es" ? "Método y límites" : "Method and limits"}</button><span>{copy.footer}</span></footer>
     </div>
   );
 }

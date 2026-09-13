@@ -51,4 +51,26 @@ describe("WalletFlowForm locale", () => {
 
     expect(screen.getByRole("button", { name: /verifica tu wallet/i })).toBeDisabled();
   });
+
+  it("delegates the connected-wallet flow after a target address is ready", async () => {
+    const user = userEvent.setup();
+    const submit = vi.fn();
+    render(<WalletFlowForm locale="es" busy={false} accessLocked submitLabel="Firmar y pagar 0.001 USDC" onSubmit={submit} />);
+
+    await user.type(screen.getByRole("textbox"), "0x5C18Cb1245bdca02289e1c1f209846D245d4135C");
+    await user.click(screen.getByRole("button", { name: /firmar y pagar/i }));
+
+    expect(submit).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed while the payment contract is not ready", async () => {
+    const user = userEvent.setup();
+    const submit = vi.fn();
+    render(<WalletFlowForm locale="es" busy={false} accessLocked paymentReady={false} onSubmit={submit} />);
+
+    await user.type(screen.getByRole("textbox"), "0x5C18Cb1245bdca02289e1c1f209846D245d4135C");
+
+    expect(screen.getByRole("button", { name: /verifica tu wallet/i })).toBeDisabled();
+    expect(submit).not.toHaveBeenCalled();
+  });
 });

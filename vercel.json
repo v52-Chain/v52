@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/healthz", "destination": "https://v52-backend.onrender.com/healthz" },
+    { "source": "/v1/:path*", "destination": "https://v52-backend.onrender.com/v1/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

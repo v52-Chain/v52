@@ -1,8 +1,12 @@
 import react from "@vitejs/plugin-react";
+import { loadEnv } from "vite";
 import { defineConfig } from "vitest/config";
 import { VitePWA } from "vite-plugin-pwa";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, ".", "");
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET?.trim() || "http://127.0.0.1:8000";
+  return ({
   plugins: [
     react(),
     VitePWA({
@@ -24,11 +28,11 @@ export default defineConfig({
         name: "Vector52 Forensic Flow",
         short_name: "Vector52",
         description: "Wallet flow investigation with verifiable onchain evidence.",
-        id: "/",
+        id: "/app",
         theme_color: "#f7f7fb",
         background_color: "#f7f7fb",
         display: "standalone",
-        start_url: "/",
+        start_url: "/app",
         scope: "/",
         icons: [
           {
@@ -60,8 +64,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/healthz": "http://127.0.0.1:8000",
-      "/v1": "http://127.0.0.1:8000"
+      "/healthz": { target: apiProxyTarget, changeOrigin: true },
+      "/v1": { target: apiProxyTarget, changeOrigin: true }
     }
   },
   test: {
@@ -72,4 +76,5 @@ export default defineConfig({
     pool: "threads",
     maxWorkers: 1
   }
+  });
 });

@@ -27,13 +27,13 @@ importers:
         specifier: 6.2.0
         version: 6.2.0(8310d0810eee53c2e7a447224fd1c987)
       '@x402/core':
-        specifier: ^2.25.0
+        specifier: 2.25.0
         version: 2.25.0
       '@x402/evm':
-        specifier: ^2.25.0
+        specifier: 2.25.0
         version: 2.25.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@x402/fetch':
-        specifier: ^2.25.0
+        specifier: 2.25.0
         version: 2.25.0
       lucide-react:
         specifier: ^1.45.0

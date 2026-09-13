@@ -1,4 +1,4 @@
-import type { AccessPlans, AgentCapabilities, AuditResult, ClaimAuditRequest, CreditBalance, HealthResponse, WalletChallenge, WalletFlowFilters, WalletSession, WalletVerifyInput, WebWalletFlowResponse } from "../domain/apiTypes";
+import type { AgentCapabilities, AuditResult, ClaimAuditRequest, HealthResponse, McpStatusResponse, McpToolsResponse, WalletChallenge, WalletIdentity, WalletSession, WalletVerifyInput, WebCapabilities } from "../domain/apiTypes";
 
 export class Vector52ApiError extends Error {
   readonly status: number;
@@ -13,13 +13,16 @@ export class Vector52ApiError extends Error {
 }
 
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, "");
-export const vector52ApiBaseUrl = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL ?? "");
+// Same-origin by default. Vite proxies these routes locally and Vercel proxies
+// them in production, so the browser never depends on cross-origin CORS.
+const DEFAULT_API_BASE_URL = "";
+export const vector52ApiBaseUrl = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL);
 export const vector52ApiUrl = (path: string) => `${vector52ApiBaseUrl}${path}`;
 
 export class Vector52Client {
   private readonly baseUrl: string;
 
-  constructor(baseUrl = import.meta.env.VITE_API_BASE_URL ?? "") {
+  constructor(baseUrl = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL) {
     this.baseUrl = trimTrailingSlash(baseUrl);
   }
 
@@ -52,30 +55,8 @@ export class Vector52Client {
     });
   }
 
-  async webWalletFlow(address: string, limit: number, filters: WalletFlowFilters, accessToken: string, signal?: AbortSignal): Promise<WebWalletFlowResponse> {
-    return this.request<WebWalletFlowResponse>("/v1/web/investigations/wallet-flow", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        target_address: address.trim(),
-        chain_id: 1,
-        limit,
-        from_date: filters.fromDate,
-        to_date: filters.toDate
-      }),
-      signal
-    });
-  }
-
-  async accessPlans(signal?: AbortSignal): Promise<AccessPlans> {
-    return this.request<AccessPlans>("/v1/web/plans", { signal });
-  }
-
-  async creditBalance(accessToken: string, signal?: AbortSignal): Promise<CreditBalance> {
-    return this.request<CreditBalance>("/v1/web/credits", {
+  async walletIdentity(accessToken: string, signal?: AbortSignal): Promise<WalletIdentity> {
+    return this.request<WalletIdentity>("/v1/auth/wallet/me", {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal
     });
@@ -83,6 +64,18 @@ export class Vector52Client {
 
   async agentCapabilities(signal?: AbortSignal): Promise<AgentCapabilities> {
     return this.request<AgentCapabilities>("/v1/agent/capabilities", { signal });
+  }
+
+  async webCapabilities(signal?: AbortSignal): Promise<WebCapabilities> {
+    return this.request<WebCapabilities>("/v1/web/capabilities", { signal });
+  }
+
+  async mcpStatus(signal?: AbortSignal): Promise<McpStatusResponse> {
+    return this.request<McpStatusResponse>("/v1/integrations/mcp/status", { signal });
+  }
+
+  async mcpTools(signal?: AbortSignal): Promise<McpToolsResponse> {
+    return this.request<McpToolsResponse>("/v1/integrations/mcp/tools", { signal });
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

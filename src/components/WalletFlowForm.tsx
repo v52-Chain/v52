@@ -8,6 +8,8 @@ interface Props {
   locale: Locale;
   busy: boolean;
   accessLocked: boolean;
+  submitLabel?: string;
+  paymentReady?: boolean;
   onSubmit: (address: string, limit: number, filters: WalletFlowFilters) => void;
 }
 
@@ -27,7 +29,7 @@ function filtersForPreset(preset: RangePreset, fromDate: string, toDate: string)
 
 const ETH_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 
-export function WalletFlowForm({ locale, busy, accessLocked, onSubmit }: Props) {
+export function WalletFlowForm({ locale, busy, accessLocked, submitLabel, paymentReady = true, onSubmit }: Props) {
   const [address, setAddress] = useState("");
   const [limit, setLimit] = useState(25);
   const [range, setRange] = useState<RangePreset>("30d");
@@ -54,7 +56,8 @@ export function WalletFlowForm({ locale, busy, accessLocked, onSubmit }: Props) 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setTouched(true);
-    if (valid && !invalidRange) onSubmit(address.trim(), limit, filters);
+    if (!valid || invalidRange) return;
+    onSubmit(address.trim(), limit, filters);
   };
 
   return (
@@ -103,9 +106,9 @@ export function WalletFlowForm({ locale, busy, accessLocked, onSubmit }: Props) 
             <option value={25}>25 + 25</option>
             <option value={50}>50 + 50</option>
           </select>
-          <button type="submit" disabled={busy || accessLocked || !valid || invalidRange}>
+          <button type="submit" disabled={busy || !valid || invalidRange || !paymentReady}>
             <Search size={17} aria-hidden="true" />
-            {busy ? copy.loading : accessLocked ? copy.connect : copy.submit}
+            {busy ? copy.loading : submitLabel ?? (accessLocked ? copy.connect : copy.submit)}
           </button>
         </div>
         <small id="wallet-help">

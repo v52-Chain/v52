@@ -155,37 +155,11 @@ export interface WalletSession {
   expires_at: string;
 }
 
-export interface AccessPlan {
-  id: string;
-  name: string;
-  description: string;
-  network: string;
-  asset: string;
-  asset_symbol: "USDC";
-  asset_decimals: 6;
-  price_atomic: string;
-  requests: number;
-  enabled: boolean;
-}
-
-export interface AccessPlans {
-  plans: AccessPlan[];
-  credits_required: boolean;
-}
-
-export interface CreditBalance {
-  wallet: string;
-  available: number;
-  purchased: number;
-  consumed: number;
-  updated_at: string;
-}
-
-export interface CreditPurchase {
-  status: "SETTLEMENT_PENDING";
-  purchase_id: string;
-  beneficiary_wallet: string;
-  plan: AccessPlan;
+export interface WalletIdentity {
+  channel: "WEB";
+  address: string;
+  chain_id: number;
+  expires_at: string;
 }
 
 export interface WebWalletFlowResponse {
@@ -208,9 +182,67 @@ export interface AgentCapabilities {
   payment_protocol: "x402";
   network: string;
   asset: string;
+  pay_to?: string;
   amount_atomic: string;
+  amount_display?: string;
+  asset_decimals?: number;
+  billing_model?: "PER_REQUEST";
   automatic_payment_owner: "MCP_CLIENT";
   warnings: string[];
+}
+
+export interface WebCapabilities {
+  channel: "WEB_X402";
+  ready: boolean;
+  endpoint: "/v1/web/investigations/wallet-flow";
+  payment_protocol: "x402";
+  network: string;
+  asset: string;
+  pay_to?: string;
+  amount_atomic: string;
+  amount_display?: string;
+  asset_decimals?: number;
+  billing_model?: "PER_REQUEST";
+  automatic_payment_owner: "CONNECTED_WALLET";
+  authentication: "SIGNED_CHALLENGE";
+  warnings: string[];
+}
+
+export type X402Capabilities = AgentCapabilities | WebCapabilities;
+
+export type McpIntegrationState =
+  | "UNAVAILABLE"
+  | "READY"
+  | "PAYMENT_REQUIRED"
+  | "PAYMENT_PENDING"
+  | "PAYMENT_FAILED"
+  | "RUNNING"
+  | "PARTIAL"
+  | "COMPLETED"
+  | "FAILED"
+  | "UNKNOWN";
+
+export interface McpStatusResponse {
+  state: McpIntegrationState;
+  server_configured: boolean;
+  reason: string;
+  service?: string | null;
+  version?: string | null;
+  backend_ready?: boolean | null;
+  warnings: string[];
+}
+
+export interface McpToolDescriptor {
+  name: string;
+  description: string;
+  payment: "FREE" | "X402";
+  price_atomic?: string | null;
+}
+
+export interface McpToolsResponse {
+  state: McpIntegrationState;
+  tools: McpToolDescriptor[];
+  reason: string;
 }
 
 export interface FlowTransfer {

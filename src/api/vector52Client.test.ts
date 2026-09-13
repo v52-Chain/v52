@@ -13,9 +13,9 @@ describe("Vector52Client", () => {
     });
   });
 
-  it("sends a wallet-authenticated investigation to the web boundary", async () => {
+  it("validates the browser session before entering the paid boundary", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ address: "0xabc" }), {
+      new Response(JSON.stringify({ channel: "WEB", address: "0xabc" }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
       })
@@ -23,39 +23,59 @@ describe("Vector52Client", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = new Vector52Client("http://localhost:8000/");
 
-    await client.webWalletFlow("  0xabc  ", 10, {}, "browser-session");
+    await client.walletIdentity("browser-session");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/v1/web/investigations/wallet-flow",
+      "http://localhost:8000/v1/auth/wallet/me",
       expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({ Authorization: "Bearer browser-session" }),
-        body: expect.stringContaining('"target_address":"0xabc"')
+        headers: expect.objectContaining({ Authorization: "Bearer browser-session" })
       })
     );
   });
 
-  it("sends the selected evidence time window", async () => {
+  it("reads MCP status and tools through the backend boundary", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ state: "READY" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ state: "READY", tools: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new Vector52Client("https://api.vector52.test");
+
+    await client.mcpStatus();
+    await client.mcpTools();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.vector52.test/v1/integrations/mcp/status",
+      expect.objectContaining({ headers: expect.objectContaining({ Accept: "application/json" }) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.vector52.test/v1/integrations/mcp/tools",
+      expect.any(Object)
+    );
+  });
+
+  it("reads the browser payment contract from the web channel", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ address: "0xabc" }), {
+      new Response(JSON.stringify({ channel: "WEB_X402", ready: true }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
       })
     );
     vi.stubGlobal("fetch", fetchMock);
-    const client = new Vector52Client("http://localhost:8000");
+    const client = new Vector52Client("https://api.vector52.test");
 
-    await client.webWalletFlow(
-      "0xabc",
-      25,
-      { fromDate: "2026-08-01", toDate: "2026-08-31" },
-      "browser-session"
+    await client.webCapabilities();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.vector52.test/v1/web/capabilities",
+      expect.objectContaining({ headers: expect.objectContaining({ Accept: "application/json" }) })
     );
-
-    const request = fetchMock.mock.calls[0][1] as RequestInit;
-    expect(JSON.parse(String(request.body))).toMatchObject({
-      from_date: "2026-08-01",
-      to_date: "2026-08-31"
-    });
   });
 });
